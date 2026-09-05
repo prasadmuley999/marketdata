@@ -1,4 +1,4 @@
-name: NSE File Downloader & Dashboard Builder
+name: v3 NSE File Downloader & Dashboard Builder
 
 on:
   schedule:
