@@ -5,6 +5,10 @@ import urllib.request
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 
 # Constants
 NIFTY_50_SYMBOLS = [
@@ -392,6 +396,53 @@ def generate_html_content(df, today_col, historical_cols, gainers, losers):
 </body>
 </html>"""
 
+def get_recipient_email():
+    if os.path.exists('email.txt'):
+        try:
+            with open('email.txt', 'r') as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return None
+
+def send_email_dashboard(recipient, html_content):
+    """Dispatches the HTML dashboard to the specified recipient using SMTP."""
+    smtp_server = os.environ.get('SMTP_SERVER')
+    smtp_port = os.environ.get('SMTP_PORT', '587')
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_pass = os.environ.get('SMTP_PASSWORD')
+    
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print("SMTP credentials are not fully configured. Email dispatch skipped.")
+        return
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
+    msg['From'] = smtp_user
+    msg['To'] = recipient
+
+    # Add HTML as inline body
+    part_html = MIMEText(html_content, 'html')
+    msg.attach(part_html)
+
+    # Attach file
+    part_file = MIMEBase('application', 'octet-stream')
+    part_file.set_payload(html_content.encode('utf-8'))
+    encoders.encode_base64(part_file)
+    part_file.add_header('Content-Disposition', 'attachment; filename="dashboard.html"')
+    msg.attach(part_file)
+
+    try:
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, recipient, msg.as_string())
+        server.quit()
+        print(f"Email successfully dispatched to {recipient}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+
 def main():
     # 1. Sync & track 7 files
     valid_filenames = sync_reports()
@@ -402,10 +453,16 @@ def main():
     # 3. Write locally to index.html (for GitHub Pages hosting)
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
-    print("Dashboard local file written successfully.")
 
-    # 4. Write Markdown Report to GitHub Actions Summary
+    # 4. Write Markdown Report to GitHub Actions Summary (Job Summary)
     write_github_summary(valid_filenames, gainers, losers)
+
+    # 5. Send custom HTML email if email.txt and secrets exist
+    recipient = get_recipient_email()
+    if recipient:
+        send_email_dashboard(recipient, html_content)
+    else:
+        print("No target recipient found in email.txt.")
 
 if __name__ == '__main__':
     main()
