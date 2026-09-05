@@ -1,9 +1,6 @@
 name: v3 NSE File Downloader & Dashboard Builder
 
 on:
-  schedule:
-    # Runs at 15:00 UTC (8:30 PM IST) Monday to Friday
-    - cron: '30 14 * * *'
   workflow_dispatch: # Allows you to manually click "Run workflow"
 
 permissions:
