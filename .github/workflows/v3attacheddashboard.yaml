@@ -1,13 +1,13 @@
-name: v3 NSE File Downloader & Dashboard Builder
+name: NSE File Downloader & Dashboard Builder
 
 on:
   schedule:
-    # Runs at 14:30 UTC (8:00 PM IST) Monday to Friday
-    - cron: '30 14 * * 1-5'
-  workflow_dispatch: # Allows manual run
+    # Runs at 15:00 UTC (8:30 PM IST) Monday to Friday
+    - cron: '0 15 * * 1-5'
+  workflow_dispatch: # Allows you to manually click "Run workflow"
 
 permissions:
-  contents: write # Saves files back to your repository
+  contents: write # Allows GitHub to save the downloaded files and index.html back to your repo
 
 jobs:
   download_and_build:
@@ -28,7 +28,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Sync Reports and Generate Dashboard
+      - name: Sync Reports, Generate Dashboard and Send Email
+        env:
+          # Passes repository secrets directly to the Python runtime
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           python generate_dashboard.py
 
@@ -37,5 +43,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
+          # Stage download reports, deleted records, and the new index.html file
           git add reports/ index.html
+          
+          # Only commits if there are actual updates
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update NSE data & build dashboard" && git push)
