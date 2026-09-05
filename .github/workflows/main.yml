@@ -1,0 +1,46 @@
+name: Daily NSE MTO Downloader
+
+on:
+  schedule:
+    # 5:15 AM UTC is exactly 10:45 AM IST
+    - cron: '36 5 * * *'
+  workflow_dispatch: # Allows you to manually click "Run workflow" to test it anytime
+
+permissions:
+  contents: write # Gives the runner permission to commit files back to your repo
+
+jobs:
+  download-and-cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Fetch Dynamic NSE File
+        run: |
+          # 1. Ensure the system clock uses Indian Standard Time
+          export TZ="Asia/Kolkata"
+          
+          # 2. Generate the DDMMYYYY date string (e.g., 05092026)
+          IST_DATE=$(date +'%d%m%Y')
+          echo "Fetching NSE MTO file for date: $IST_DATE"
+          
+          # 3. Download the file using a browser User-Agent to prevent NSE from blocking the request
+          curl -sL -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "https://nseindia.com{IST_DATE}.DAT" \
+            -o "reports/MTO_${IST_DATE}.DAT"
+
+      - name: Delete reports older than 7 days
+        run: |
+          find reports/ -type f -mtime +7 -delete
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git add reports/
+          
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated daily NSE MTO update" && git push)
