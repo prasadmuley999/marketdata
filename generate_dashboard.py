@@ -2,6 +2,7 @@ import os
 import re
 import glob
 import urllib.request
+import smtplib  
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
