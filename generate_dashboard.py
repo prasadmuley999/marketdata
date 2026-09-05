@@ -2,14 +2,9 @@ import os
 import re
 import glob
 import urllib.request
-import smtplib
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 
 # Constants
 NIFTY_50_SYMBOLS = [
@@ -165,52 +160,42 @@ def get_nifty_price_data():
         print(f"Error fetching market prices: {e}")
         return [], []
 
-def get_recipient_email():
-    """Reads recipient email from email.txt."""
-    if os.path.exists('email.txt'):
-        try:
-            with open('email.txt', 'r') as f:
-                return f.read().strip()
-        except Exception as e:
-            print(f"Error reading email.txt: {e}")
-    return None
-
-def send_email_dashboard(recipient, html_content):
-    """Sends the generated dashboard using environment variables."""
-    smtp_server = os.environ.get('SMTP_SERVER')
-    smtp_port = os.environ.get('SMTP_PORT', '587')
-    smtp_user = os.environ.get('SMTP_USER')
-    smtp_pass = os.environ.get('SMTP_PASSWORD')
-    
-    if not all([smtp_server, smtp_user, smtp_pass]):
-        print("SMTP Credentials not fully configured. Email dispatch skipped.")
+def write_github_summary(valid_filenames, gainers, losers):
+    """Writes a clean report and dynamic dashboard links directly to the GitHub Actions page."""
+    summary_file = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not summary_file:
         return
-
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
-    msg['From'] = smtp_user
-    msg['To'] = recipient
-
-    # Inline HTML for viewing directly within the email client
-    part_html = MIMEText(html_content, 'html')
-    msg.attach(part_html)
-
-    # File attachment (HTML format)
-    part_file = MIMEBase('application', 'octet-stream')
-    part_file.set_payload(html_content.encode('utf-8'))
-    encoders.encode_base64(part_file)
-    part_file.add_header('Content-Disposition', 'attachment; filename="dashboard.html"')
-    msg.attach(part_file)
-
-    try:
-        server = smtplib.SMTP(smtp_server, int(smtp_port))
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, recipient, msg.as_string())
-        server.quit()
-        print(f"Dashboard successfully emailed to: {recipient}")
-    except Exception as e:
-        print(f"SMTP Transmission Error: {e}")
+        
+    # Extract owner and repo dynamically from GHA environment variables
+    repo = os.environ.get('GITHUB_REPOSITORY', 'username/repo')
+    owner, repo_name = repo.split('/')
+    pages_url = f"https://{owner}.github.io/{repo_name}/"
+    
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        f.write("# 📊 NSE Delivery & Price Dashboard\n\n")
+        f.write("The daily sync run has successfully verified the **7 most recent trading sessions**.\n\n")
+        f.write(f"### 🔗 **[Click here to open your Live Dashboard]({pages_url})**\n\n")
+        
+        f.write("## 🚀 Today's Market Leaders (Nifty 50)\n\n")
+        f.write("| Top 4 Gainers | % Change | Top 4 Losers | % Change |\n")
+        f.write("| --- | --- | --- | --- |\n")
+        
+        for i in range(4):
+            g_sym = gainers[i]['SYMBOL'] if i < len(gainers) else "—"
+            g_chg = f"+{gainers[i]['PCT_CHANGE']:.2f}%" if i < len(gainers) else "—"
+            l_sym = losers[i]['SYMBOL'] if i < len(losers) else "—"
+            l_chg = f"{losers[i]['PCT_CHANGE']:.2f}%" if i < len(losers) else "—"
+            f.write(f"| **{g_sym}** | {g_chg} | **{l_sym}** | {l_chg} |\n")
+            
+        f.write("\n---\n\n")
+        f.write("### 📂 Synchronized Report Files (Last 7 Sessions)\n")
+        for filename in valid_filenames:
+            match = re.search(r'MTO_(\d{8})\.DAT', filename)
+            if match:
+                dt = datetime.strptime(match.group(1), '%d%m%Y')
+                f.write(f"- `{filename}` ({dt.strftime('%d-%b-%Y')})\n")
+            else:
+                f.write(f"- `{filename}`\n")
 
 def build_dashboard(valid_filenames):
     master_df = pd.DataFrame({'SYMBOL': NIFTY_50_SYMBOLS})
@@ -245,7 +230,9 @@ def build_dashboard(valid_filenames):
     master_df = master_df.sort_values(by='Diff vs D-1', ascending=False, na_position='last')
     gainers, losers = get_nifty_price_data()
     
-    return generate_html_content(master_df, del_today, del_historical, gainers, losers)
+    # Return HTML content along with gainers and losers to pass to the summary builder
+    html_content = generate_html_content(master_df, del_today, del_historical, gainers, losers)
+    return html_content, gainers, losers
 
 def generate_html_content(df, today_col, historical_cols, gainers, losers):
     header_cols_html = f'<th onclick="sortTable(0)" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Symbol</th>\n'
@@ -409,23 +396,16 @@ def main():
     # 1. Sync & track 7 files
     valid_filenames = sync_reports()
     
-    if len(valid_filenames) < 7:
-        print(f"Warning: Only found {len(valid_filenames)} valid files. Running dashboard generation with partial historical record.")
-        
     # 2. Compile dashboard structure
-    html_content = build_dashboard(valid_filenames)
+    html_content, gainers, losers = build_dashboard(valid_filenames)
     
     # 3. Write locally to index.html (for GitHub Pages hosting)
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     print("Dashboard local file written successfully.")
 
-    # 4. Check for email deployment instructions
-    recipient = get_recipient_email()
-    if recipient:
-        send_email_dashboard(recipient, html_content)
-    else:
-        print("No target recipient found in email.txt.")
+    # 4. Write Markdown Report to GitHub Actions Summary
+    write_github_summary(valid_filenames, gainers, losers)
 
 if __name__ == '__main__':
     main()
