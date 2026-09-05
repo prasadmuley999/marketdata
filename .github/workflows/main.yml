@@ -17,15 +17,15 @@ jobs:
         run: |
           # Uses a User-Agent header to prevent NSE from blocking the request
           curl -sL -H "User-Agent: Mozilla/5.0" \
-            "https://archives.nseindia.com/archives/equities/mto/MTO_04092026.DAT" \
+            "https://archives.nseindia.com/archives/equities/mto/MTO_28082026.DAT" \
             -o "reports/MTO_28082026.DAT"
-            "https://archives.nseindia.com/archives/equities/mto/MTO_04092026.DAT" \
+            "https://archives.nseindia.com/archives/equities/mto/MTO_03092026.DAT" \
             -o "reports/MTO_03092026.DAT"
-            "https://archives.nseindia.com/archives/equities/mto/MTO_04092026.DAT" \
+            "https://archives.nseindia.com/archives/equities/mto/MTO_02092026.DAT" \
             -o "reports/MTO_02092026.DAT"
-            "https://archives.nseindia.com/archives/equities/mto/MTO_04092026.DAT" \
+            "https://archives.nseindia.com/archives/equities/mto/MTO_01092026.DAT" \
             -o "reports/MTO_01092026.DAT"
-            "https://archives.nseindia.com/archives/equities/mto/MTO_04092026.DAT" \
+            "https://archives.nseindia.com/archives/equities/mto/MTO_31082026.DAT" \
             -o "reports/MTO_31082026.DAT"
 
       - name: Commit and Push to Repository
