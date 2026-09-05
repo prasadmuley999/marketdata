@@ -259,7 +259,7 @@ def send_email_dashboard(recipient, full_html, email_body_html):
 
     msg = MIMEMultipart('alternative')
     msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
-    msg['From'] = smtp_user
+    msg['From'] = "DailyStats"
     msg['To'] = recipient
 
     # Add safe inline HTML as the body
