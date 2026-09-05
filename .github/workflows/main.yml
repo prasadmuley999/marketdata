@@ -6,8 +6,12 @@ on:
 permissions:
   contents: write # Allows GitHub to save the downloaded file back to your repo
 
+
+
 jobs:
   download:
+    env:
+      Date: "28082026"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -17,15 +21,15 @@ jobs:
         run: |
           # Uses a User-Agent header to prevent NSE from blocking the request
           curl -sL -H "User-Agent: Mozilla/5.0" \
-            "https://archives.nseindia.com/archives/equities/mto/MTO_28082026.DAT" \
-            -o "reports/MTO_28082026.DAT"
+            "https://archives.nseindia.com/archives/equities/mto/MTO_$Date.DAT" \
+            -o "reports/MTO_$Date.DAT"
             
 
       - name: Commit and Push to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@://github.com"
-          git add reports/MTO_04092026.DAT
+          git add reports/MTO_$Date.DAT
           
           # Only commits if the file is new or updated
           git diff --quiet && git diff --staged --quiet || (git commit -m "Add NSE MTO report" && git push)
