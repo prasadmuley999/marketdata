@@ -2,7 +2,7 @@ import os
 import re
 import glob
 import urllib.request
-import smtplib  
+import smtplib
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -11,7 +11,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 
-# Constants
+# Tickers updated for 2026 demergers (TMPV instead of TATAMOTORS, LTM instead of LTIM)
 NIFTY_50_SYMBOLS = [
     "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", 
     "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BPCL", "BHARTIARTL", 
@@ -19,17 +19,16 @@ NIFTY_50_SYMBOLS = [
     "EICHERMOT", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE", 
     "HEROMOTOCO", "HINDALCO", "HINDUNILVR", "ICICIBANK", "ITC", 
     "INDUSINDBK", "INFY", "JSWSTEEL", "KOTAKBANK", "LT", 
-    "LTM", "M&M", "MARUTI", "NTPC", "NESTLEIND", "ONGC", 
+    "LTIM", "M&M", "MARUTI", "NTPC", "NESTLEIND", "ONGC", 
     "POWERGRID", "RELIANCE", "SBILIFE", "SHRIRAMFIN", "SBIN", 
     "SUNPHARMA", "TCS", "TATACONSUM", "TMPV", "TATASTEEL", 
     "TECHM", "TITAN", "ULTRACEMCO", "WIPRO"
 ]
 
 def is_valid_file(filepath):
-    """Ensures the file is a valid DAT file, not an HTML error or empty response."""
     if not os.path.exists(filepath):
         return False
-    if os.path.getsize(filepath) < 500: # Standard MTO files are much larger
+    if os.path.getsize(filepath) < 500:
         return False
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -41,7 +40,6 @@ def is_valid_file(filepath):
     return True
 
 def download_file(url, filepath):
-    """Downloads a file with headers to prevent blocklisting and verifies validity."""
     req = urllib.request.Request(
         url, 
         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -62,10 +60,7 @@ def download_file(url, filepath):
     return False
 
 def sync_reports():
-    """Ensures exactly 7 of the most recent market reports are available."""
     os.makedirs('reports', exist_ok=True)
-    
-    # Calculate IST current time from UTC
     utc_now = datetime.utcnow()
     ist_now = utc_now + timedelta(hours=5, minutes=30)
     
@@ -74,13 +69,10 @@ def sync_reports():
     current_date = ist_now
     checked_days = 0
     
-    print("Checking database. Ensuring 7 most recent trading reports are present...")
+    print("Synchronizing reports...")
     
-    # Trace back up to 30 calendar days to find 7 valid trading sessions
     while count < 7 and checked_days < 30:
         checked_days += 1
-        
-        # Skip Saturday (5) and Sunday (6)
         if current_date.weekday() >= 5:
             current_date -= timedelta(days=1)
             continue
@@ -94,26 +86,21 @@ def sync_reports():
             count += 1
         else:
             url = f"https://archives.nseindia.com/archives/equities/mto/{filename}"
-            print(f"File missing/invalid for {current_date.strftime('%Y-%m-%d')}. Attempting download...")
             if download_file(url, filepath):
                 print(f"-> Successfully downloaded: {filename}")
                 keep_files.add(filename)
                 count += 1
-            else:
-                print(f"-> Not available (holiday, weekend, or not yet published)")
                 
         current_date -= timedelta(days=1)
         
-    # Remove older files beyond the 7 tracked ones
     all_files = glob.glob('reports/MTO_*.DAT')
     for f in all_files:
         basename = os.path.basename(f)
         if basename not in keep_files:
             try:
                 os.remove(f)
-                print(f"Removed older report file: {basename}")
-            except Exception as e:
-                print(f"Error clean-up: {basename}: {e}")
+            except Exception:
+                pass
                 
     return sorted(list(keep_files), reverse=True)
 
@@ -165,13 +152,142 @@ def get_nifty_price_data():
         print(f"Error fetching market prices: {e}")
         return [], []
 
+def get_recipient_email():
+    if os.path.exists('email.txt'):
+        try:
+            with open('email.txt', 'r') as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return None
+
+def generate_email_body_html(valid_filenames, gainers, losers, pages_url):
+    """Generates a beautiful email body using inline-styled universal HTML compatible with modern email clients."""
+    last_updated = datetime.now().strftime('%d-%b-%Y %I:%M %p')
+    
+    # 1. Compile Table Rows
+    table_rows = ""
+    for i in range(4):
+        g_sym = gainers[i]['SYMBOL'] if i < len(gainers) else "—"
+        g_chg = f"+{gainers[i]['PCT_CHANGE']:.2f}%" if i < len(gainers) else "—"
+        g_color = "#34d399" if i < len(gainers) else "#94a3b8"
+        
+        l_sym = losers[i]['SYMBOL'] if i < len(losers) else "—"
+        l_chg = f"{losers[i]['PCT_CHANGE']:.2f}%" if i < len(losers) else "—"
+        l_color = "#f87171" if i < len(losers) else "#94a3b8"
+        
+        table_rows += f"""
+        <tr style="border-bottom: 1px solid #334155;">
+            <td style="padding: 10px; text-align: left; font-weight: bold; color: #f1f5f9; font-size: 14px;">{g_sym}</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold; color: {g_color}; font-size: 14px;">{g_chg}</td>
+            <td style="padding: 10px; text-align: left; font-weight: bold; color: #f1f5f9; font-size: 14px;">{l_sym}</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold; color: {l_color}; font-size: 14px;">{l_chg}</td>
+        </tr>
+        """
+        
+    # 2. Compile Report File List
+    file_list_items = ""
+    for filename in valid_filenames:
+        match = re.search(r'MTO_(\d{8})\.DAT', filename)
+        date_label = datetime.strptime(match.group(1), '%d%m%Y').strftime('%d-%b-%Y') if match else ""
+        file_list_items += f"""
+        <li style="margin-bottom: 6px; font-size: 13px;">
+            <code style="background-color: #1e293b; padding: 3px 6px; border-radius: 4px; color: #38bdf8; font-family: monospace; font-size: 13px;">{filename}</code> 
+            <span style="color: #94a3b8; margin-left: 8px;">({date_label})</span>
+        </li>
+        """
+
+    # 3. Clean CSS Wrapped layout
+    return f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f1f5f9; padding: 32px 24px; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #1e293b;">
+        
+        <h2 style="color: #ffffff; margin-top: 0; margin-bottom: 8px; font-size: 22px; font-weight: 800; display: flex; align-items: center;">
+            📊 NSE Delivery & Price Dashboard
+        </h2>
+        <p style="color: #94a3b8; font-size: 14px; margin-top: 0; margin-bottom: 24px; line-height: 1.5;">
+            The daily sync run has successfully verified the <strong>7 most recent trading sessions</strong>.
+        </p>
+        
+        <div style="margin-bottom: 32px; margin-top: 10px;">
+            <a href="{pages_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; border-radius: 6px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                🔗 Click here to open your Live Dashboard
+            </a>
+        </div>
+        
+        <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
+            🚀 Today's Market Leaders (Nifty 50)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
+            <thead>
+                <tr style="background-color: #1e293b; color: #94a3b8; font-size: 12px; text-transform: uppercase;">
+                    <th style="padding: 10px; text-align: left; font-weight: 600;">Top 4 Gainers</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600;">% Change</th>
+                    <th style="padding: 10px; text-align: left; font-weight: 600;">Top 4 Losers</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600;">% Change</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+        
+        <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
+            📁 Synchronized Report Files (Last 7 Sessions)
+        </h3>
+        <ul style="padding-left: 0; list-style-type: none; margin-top: 0; margin-bottom: 0;">
+            {file_list_items}
+        </ul>
+        
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 32px 0;">
+        <p style="color: #64748b; font-size: 11px; text-align: center; margin: 0; line-height: 1.4;">
+            This is an automated operational notification. <br>
+            Dashboard generation timestamp: {last_updated} IST.
+        </p>
+    </div>
+    """
+
+def send_email_dashboard(recipient, full_html, email_body_html):
+    """Dispatches the beautiful HTML summary in the email body, with full_html as an attachment."""
+    smtp_server = os.environ.get('SMTP_SERVER')
+    smtp_port = os.environ.get('SMTP_PORT', '587')
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_pass = os.environ.get('SMTP_PASSWORD')
+    
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print("SMTP credentials are not fully configured. Email dispatch skipped.")
+        return
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
+    msg['From'] = smtp_user
+    msg['To'] = recipient
+
+    # Add safe inline HTML as the body
+    part_html = MIMEText(email_body_html, 'html')
+    msg.attach(part_html)
+
+    # Attach the full interactive index.html as a file attachment
+    part_file = MIMEBase('application', 'octet-stream')
+    part_file.set_payload(full_html.encode('utf-8'))
+    encoders.encode_base64(part_file)
+    part_file.add_header('Content-Disposition', 'attachment; filename="dashboard.html"')
+    msg.attach(part_file)
+
+    try:
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, recipient, msg.as_string())
+        server.quit()
+        print(f"Email successfully dispatched to {recipient}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
 def write_github_summary(valid_filenames, gainers, losers):
-    """Writes a clean report and dynamic dashboard links directly to the GitHub Actions page."""
     summary_file = os.environ.get('GITHUB_STEP_SUMMARY')
     if not summary_file:
         return
         
-    # Extract owner and repo dynamically from GHA environment variables
     repo = os.environ.get('GITHUB_REPOSITORY', 'username/repo')
     owner, repo_name = repo.split('/')
     pages_url = f"https://{owner}.github.io/{repo_name}/"
@@ -235,7 +351,6 @@ def build_dashboard(valid_filenames):
     master_df = master_df.sort_values(by='Diff vs D-1', ascending=False, na_position='last')
     gainers, losers = get_nifty_price_data()
     
-    # Return HTML content along with gainers and losers to pass to the summary builder
     html_content = generate_html_content(master_df, del_today, del_historical, gainers, losers)
     return html_content, gainers, losers
 
@@ -397,53 +512,6 @@ def generate_html_content(df, today_col, historical_cols, gainers, losers):
 </body>
 </html>"""
 
-def get_recipient_email():
-    if os.path.exists('email.txt'):
-        try:
-            with open('email.txt', 'r') as f:
-                return f.read().strip()
-        except Exception:
-            pass
-    return None
-
-def send_email_dashboard(recipient, html_content):
-    """Dispatches the HTML dashboard to the specified recipient using SMTP."""
-    smtp_server = os.environ.get('SMTP_SERVER')
-    smtp_port = os.environ.get('SMTP_PORT', '587')
-    smtp_user = os.environ.get('SMTP_USER')
-    smtp_pass = os.environ.get('SMTP_PASSWORD')
-    
-    if not all([smtp_server, smtp_user, smtp_pass]):
-        print("SMTP credentials are not fully configured. Email dispatch skipped.")
-        return
-
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
-    msg['From'] = smtp_user
-    msg['To'] = recipient
-
-    # Add HTML as inline body
-    part_html = MIMEText(html_content, 'html')
-    msg.attach(part_html)
-
-    # Attach file
-    part_file = MIMEBase('application', 'octet-stream')
-    part_file.set_payload(html_content.encode('utf-8'))
-    encoders.encode_base64(part_file)
-    part_file.add_header('Content-Disposition', 'attachment; filename="dashboard.html"')
-    msg.attach(part_file)
-
-    try:
-        server = smtplib.SMTP(smtp_server, int(smtp_port))
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, recipient, msg.as_string())
-        server.quit()
-        print(f"Email successfully dispatched to {recipient}")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-
-
 def main():
     # 1. Sync & track 7 files
     valid_filenames = sync_reports()
@@ -461,7 +529,15 @@ def main():
     # 5. Send custom HTML email if email.txt and secrets exist
     recipient = get_recipient_email()
     if recipient:
-        send_email_dashboard(recipient, html_content)
+        # Generate the safe, beautiful inline-styled HTML for email clients
+        repo = os.environ.get('GITHUB_REPOSITORY', 'username/repo')
+        owner, repo_name = repo.split('/')
+        pages_url = f"https://{owner}.github.io/{repo_name}/"
+        
+        email_body_html = generate_email_body_html(valid_filenames, gainers, losers, pages_url)
+        
+        # Dispatch email
+        send_email_dashboard(recipient, html_content, email_body_html)
     else:
         print("No target recipient found in email.txt.")
 
