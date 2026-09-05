@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Equity Delivery & Price Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body { background-color: #0f172a; }</style>
+</head>
+<body class="text-slate-100 font-sans min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-6 mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">NSE Delivery Tracker</h1>
+                <p class="text-sm text-slate-400 mt-1">Nifty 50 Deliverable Quantity & Price Action Overview</p>
+            </div>
+            <div>
+                <span class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-full inline-block">
+                    Dashboard Updated: 05-Sep-2026 12:26 PM (IST)
+                </span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div>
+                <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Top 4 Market Gainers
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3"><div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">SBILIFE</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹1775.00</span>    <span class="text-sm font-bold text-emerald-400">+3.50%</span>  </div></div><div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">TATASTEEL</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹188.79</span>    <span class="text-sm font-bold text-emerald-400">+2.49%</span>  </div></div><div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">HDFCLIFE</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹546.40</span>    <span class="text-sm font-bold text-emerald-400">+2.42%</span>  </div></div><div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">RELIANCE</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹1322.00</span>    <span class="text-sm font-bold text-emerald-400">+1.50%</span>  </div></div></div>
+            </div>
+            <div>
+                <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-rose-500"></span> Top 4 Market Losers
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3"><div class="bg-slate-800 border-l-4 border-rose-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">HCLTECH</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹1293.40</span>    <span class="text-sm font-bold text-rose-400">-1.94%</span>  </div></div><div class="bg-slate-800 border-l-4 border-rose-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">DIVISLAB</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹9100.00</span>    <span class="text-sm font-bold text-rose-400">-1.62%</span>  </div></div><div class="bg-slate-800 border-l-4 border-rose-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">BHARTIARTL</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹1840.00</span>    <span class="text-sm font-bold text-rose-400">-1.55%</span>  </div></div><div class="bg-slate-800 border-l-4 border-rose-500 rounded p-4 shadow-sm">  <div class="text-xs text-slate-400 font-bold tracking-wider">BPCL</div>  <div class="flex items-baseline justify-between mt-1">    <span class="text-lg font-extrabold text-slate-100">₹315.70</span>    <span class="text-sm font-bold text-rose-400">-1.36%</span>  </div></div></div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div class="p-5 border-b border-slate-800 bg-slate-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <input type="text" id="searchInput" placeholder="Search stock symbol..." 
+                    class="w-full sm:w-72 bg-slate-800 text-sm text-slate-100 placeholder-slate-500 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-slate-500">
+                <div class="text-xs text-slate-400">* Click headers to sort</div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left border-collapse" id="dashboardTable">
+                    <thead class="bg-slate-800 text-slate-300 border-b border-slate-700">
+                        <tr><th onclick="sortTable(0)" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Symbol</th>
+<th onclick="sortTable(1)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Del% Today</th>
+<th onclick="sortTable(2)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Del% 28-Aug</th>
+<th onclick="sortTable(3)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Del% 27-Aug</th>
+<th onclick="sortTable(4)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Del% 04-Sep</th>
+<th onclick="sortTable(5)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Del% 03-Sep</th>
+<th onclick="sortTable(6)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Diff vs D-1</th>
+<th onclick="sortTable(7)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Diff vs Avg4</th>
+</tr>
+                    </thead>
+                    <tbody><tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ADANIENT</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="75.91">75.91</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="41.92">41.92</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.63">56.63</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="32.7">32.70</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="41.43">41.43</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="33.989999999999995">+33.99%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="32.739999999999995">+32.74%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">TCS</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="69.77">69.77</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="39.57">39.57</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.53">54.53</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.13">60.13</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.89">46.89</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="30.199999999999996">+30.20%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="19.489999999999995">+19.49%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">RELIANCE</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="86.98">86.98</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.33">59.33</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.74">55.74</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="66.0">66.00</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.58">54.58</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="27.650000000000006">+27.65%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="28.06750000000001">+28.07%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">M&M</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="83.52">83.52</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.09">57.09</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.2">59.20</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="66.18">66.18</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.31">59.31</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="26.429999999999993">+26.43%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="23.07499999999999">+23.07%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">WIPRO</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="63.43">63.43</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="37.63">37.63</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.27">46.27</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="45.67">45.67</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.28">46.28</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="25.799999999999997">+25.80%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="19.4675">+19.47%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">JSWSTEEL</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="71.85">71.85</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="49.94">49.94</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.53">61.53</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.01">53.01</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="48.25">48.25</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="21.909999999999997">+21.91%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="18.667499999999997">+18.67%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">HINDUNILVR</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="76.5">76.50</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.22">55.22</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.36">62.36</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.56">67.56</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="66.22">66.22</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="21.28">+21.28%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="13.660000000000004">+13.66%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">LT</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="68.47">68.47</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="49.0">49.00</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="50.6">50.60</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.73">62.73</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.72">51.72</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="19.47">+19.47%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.957500000000003">+14.96%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">HCLTECH</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="67.74">67.74</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="48.49">48.49</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.94">58.94</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.77">61.77</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.31">55.31</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="19.249999999999993">+19.25%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.61249999999999">+11.61%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ASIANPAINT</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="71.05">71.05</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.81">52.81</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.7">54.70</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.25">60.25</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.99">57.99</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="18.239999999999995">+18.24%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.612499999999997">+14.61%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">HDFCLIFE</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="83.55">83.55</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="65.6">65.60</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="69.48">69.48</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.99">59.99</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="48.61">48.61</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.950000000000003">+17.95%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="22.629999999999995">+22.63%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ICICIBANK</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="78.23">78.23</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.42">60.42</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.25">54.25</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.79">67.79</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.81">56.81</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.810000000000002">+17.81%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="18.4125">+18.41%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">TECHM</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="68.85">68.85</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.08">51.08</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.86">51.86</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.97">56.97</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.36">59.36</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.769999999999996">+17.77%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.032499999999999">+14.03%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">DRREDDY</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="63.15">63.15</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="45.42">45.42</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.66">53.66</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.92">56.92</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.63">54.63</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.729999999999997">+17.73%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="10.4925">+10.49%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">BAJAJFINSV</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="66.92">66.92</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="49.37">49.37</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.0">57.00</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.58">53.58</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.14">53.14</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.550000000000004">+17.55%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="13.647500000000008">+13.65%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">HEROMOTOCO</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="67.94">67.94</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="50.69">50.69</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.51">52.51</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="64.24">64.24</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.59">59.59</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.25">+17.25%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.182499999999997">+11.18%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ULTRACEMCO</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="75.4">75.40</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.63">58.63</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.47">62.47</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.55">61.55</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.99">51.99</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="16.770000000000003">+16.77%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="16.74000000000001">+16.74%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ITC</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="76.62">76.62</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.75">60.75</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.44">55.44</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.86">51.86</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="69.02">69.02</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="15.870000000000005">+15.87%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.352500000000006">+17.35%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">EICHERMOT</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="72.08">72.08</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.48">56.48</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="66.06">66.06</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="69.76">69.76</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.8">55.80</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="15.600000000000001">+15.60%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="10.054999999999993">+10.05%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">BAJAJ-AUTO</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="58.61">58.61</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="43.77">43.77</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.57">58.57</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.92">58.92</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.93">51.93</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.839999999999996">+14.84%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="5.3125">+5.31%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ADANIPORTS</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="82.22">82.22</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.47">67.47</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.65">58.65</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.76">58.76</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="50.08">50.08</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.75">+14.75%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="23.480000000000004">+23.48%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">BHARTIARTL</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="81.67">81.67</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.24">67.24</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="70.45">70.45</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="72.88">72.88</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="69.67">69.67</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.430000000000007">+14.43%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.61">+11.61%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">NESTLEIND</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="74.71">74.71</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.7">60.70</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.88">54.88</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.44">58.44</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.51">56.51</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="14.009999999999991">+14.01%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="17.077499999999993">+17.08%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">SBIN</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="66.8">66.80</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.45">54.45</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.24">56.24</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.14">62.14</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="48.22">48.22</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="12.349999999999994">+12.35%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.537500000000001">+11.54%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">GRASIM</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="64.56">64.56</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.32">52.32</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.89">62.89</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.75">60.75</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.48">61.48</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="12.240000000000002">+12.24%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="5.200000000000003">+5.20%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">DIVISLAB</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="70.24">70.24</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.56">58.56</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.46">56.46</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="63.23">63.23</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="66.65">66.65</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.679999999999993">+11.68%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="9.014999999999993">+9.01%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">SUNPHARMA</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="71.47">71.47</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.39">60.39</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="64.89">64.89</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="65.13">65.13</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="64.58">64.58</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.079999999999998">+11.08%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="7.722499999999997">+7.72%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">MARUTI</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="67.45">67.45</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.62">56.62</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.04">56.04</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.47">56.47</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.66">46.66</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="10.830000000000005">+10.83%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="13.502500000000005">+13.50%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">CIPLA</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="73.1">73.10</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.65">62.65</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.51">46.51</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="51.75">51.75</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.03">53.03</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="10.449999999999996">+10.45%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="19.614999999999995">+19.61%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">BAJFINANCE</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="71.37">71.37</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.98">61.98</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.37">61.37</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="73.71">73.71</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.78">67.78</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="9.390000000000008">+9.39%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="5.159999999999997">+5.16%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">POWERGRID</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="64.1">64.10</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.38">55.38</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.96">53.96</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.84">54.84</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.66">54.66</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="8.719999999999992">+8.72%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="9.389999999999993">+9.39%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">APOLLOHOSP</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="63.2">63.20</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.85">54.85</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.34">61.34</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="76.18">76.18</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.09">61.09</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="8.350000000000001">+8.35%</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-0.16499999999999915">-0.16%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">SHRIRAMFIN</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="69.48">69.48</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.43">61.43</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.64">52.64</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="73.48">73.48</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="66.77">66.77</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="8.050000000000004">+8.05%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="5.900000000000006">+5.90%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">SBILIFE</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="71.72">71.72</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="63.8">63.80</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.36">62.36</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.5">54.50</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.19">61.19</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="7.920000000000002">+7.92%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.2575">+11.26%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">TITAN</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="74.0">74.00</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.91">67.91</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.21">58.21</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.6">52.60</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="40.61">40.61</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="6.090000000000003">+6.09%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="19.167500000000004">+19.17%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">BPCL</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="60.88">60.88</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.89">54.89</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.99">57.99</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="49.51">49.51</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="56.94">56.94</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="5.990000000000002">+5.99%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="6.0475000000000065">+6.05%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">AXISBANK</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="73.02">73.02</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="68.03">68.03</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="70.8">70.80</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.95">61.95</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.56">46.56</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="4.989999999999995">+4.99%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.185000000000002">+11.19%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">INFY</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="66.1">66.10</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.38">61.38</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.93">53.93</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="65.11">65.11</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="53.34">53.34</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="4.719999999999992">+4.72%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="7.6599999999999895">+7.66%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">BRITANNIA</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="69.79">69.79</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="65.59">65.59</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.69">52.69</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="65.28">65.28</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="50.1">50.10</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="4.200000000000003">+4.20%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.375000000000007">+11.38%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">TATACONSUM</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="75.55">75.55</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="71.99">71.99</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.46">62.46</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="68.57">68.57</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.19">57.19</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="3.5600000000000023">+3.56%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="10.497500000000002">+10.50%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">INDUSINDBK</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="56.06">56.06</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="55.07">55.07</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.52">54.52</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.42">52.42</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="54.14">54.14</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="0.990000000000002">+0.99%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="2.022500000000008">+2.02%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">ONGC</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="58.93">58.93</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.41">58.41</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="62.81">62.81</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.27">59.27</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.08">52.08</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="0.5200000000000031">+0.52%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="0.7875000000000014">+0.79%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">HDFCBANK</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="53.36">53.36</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="52.96">52.96</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.3">57.30</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.78">57.78</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="59.74">59.74</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="0.3999999999999986">+0.40%</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-3.585000000000001">-3.59%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">HINDALCO</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="59.69">59.69</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.95">60.95</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.36">60.36</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.78">60.78</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.2">46.20</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-1.2600000000000051">-1.26%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="2.6174999999999926">+2.62%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">TATASTEEL</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="62.91">62.91</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.25">67.25</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="57.23">57.23</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="46.22">46.22</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="36.81">36.81</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-4.340000000000003">-4.34%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="11.032499999999999">+11.03%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">KOTAKBANK</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="70.8">70.80</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="75.46">75.46</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="67.78">67.78</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="72.0">72.00</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.91">61.91</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-4.659999999999997">-4.66%</td>
+  <td class="px-4 py-3 text-sm text-right text-emerald-400 font-semibold" data-sort="1.5125000000000028">+1.51%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">NTPC</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="50.95">50.95</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="58.33">58.33</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="65.79">65.79</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="64.45">64.45</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="61.94">61.94</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-7.3799999999999955">-7.38%</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-11.677499999999995">-11.68%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">COALINDIA</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="56.21">56.21</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="79.38">79.38</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="71.71">71.71</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="60.97">60.97</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="39.2">39.20</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-23.169999999999995">-23.17%</td>
+  <td class="px-4 py-3 text-sm text-right text-rose-400 font-semibold" data-sort="-6.604999999999997">-6.60%</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">LTIM</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>
+</tr>
+<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+  <td class="px-4 py-3 text-sm font-bold text-slate-100">TATAMOTORS</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="-1">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>
+  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>
+</tr>
+</tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', function() {
+            let filter = this.value.toUpperCase();
+            let rows = document.getElementById('dashboardTable').getElementsByTagName('tr');
+            for (let i = 1; i < rows.length; i++) {
+                let symbolCell = rows[i].getElementsByTagName('td')[0];
+                if (symbolCell) {
+                    let txtValue = symbolCell.textContent || symbolCell.innerText;
+                    rows[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
+                }
+            }
+        });
+
+        let currentSortDir = {};
+        function sortTable(columnIndex) {
+            const table = document.getElementById("dashboardTable");
+            let rows = Array.from(table.rows).slice(1);
+            let dir = currentSortDir[columnIndex] === 'asc' ? 'desc' : 'asc';
+            currentSortDir = {};
+            currentSortDir[columnIndex] = dir;
+
+            rows.sort((rowA, rowB) => {
+                let cellA = rowA.getElementsByTagName("TD")[columnIndex];
+                let cellB = rowB.getElementsByTagName("TD")[columnIndex];
+                let valA = cellA.getAttribute("data-sort") || cellA.textContent.trim();
+                let valB = cellB.getAttribute("data-sort") || cellB.textContent.trim();
+                let floatA = parseFloat(valA);
+                let floatB = parseFloat(valB);
+
+                if (!isNaN(floatA) && !isNaN(floatB)) {
+                    return dir === 'asc' ? floatA - floatB : floatB - floatA;
+                } else {
+                    return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+            });
+            const tbody = table.getElementsByTagName('tbody')[0];
+            tbody.innerHTML = "";
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    </script>
+</body>
+</html>
