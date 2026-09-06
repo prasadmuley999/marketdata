@@ -1,10 +1,10 @@
 name: v3 NSE File Downloader & Dashboard Builder
 
 on:
-  schedule:
-    # Runs at 15:00 UTC (8:30 PM IST) Monday to Friday
-    - cron: '37 14 * * *'
-  workflow_dispatch: # Allows you to manually click "Run workflow"
+  repository_dispatch:
+    # Listens for a specific custom event from your external scheduler
+    types: [trigger-nse-dashboard]
+  workflow_dispatch: # Keeps manual trigger active
 
 permissions:
   contents: write # Allows GitHub to save the downloaded files and index.html back to your repo
