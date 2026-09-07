@@ -300,19 +300,19 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
     
     sub_idx = 1
     # 1. Sub-headers for Prices (Cols 1 to 5)
-    for i in range(4, -1, -1):
+    for i in range(5):
         date_str = dates[i].strftime('%d-%b')
         header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">{date_str}</th>\n'
         sub_idx += 1
         
     # 2. Sub-headers for Delivery % (Cols 6 to 10)
-    for i in range(4, -1, -1):
+    for i in range(5):
         date_str = dates[i].strftime('%d-%b')
         header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">{date_str}</th>\n'
         sub_idx += 1
         
     # 3. Sub-headers for Delivery Quantity (Cols 11 to 15)
-    for i in range(4, -1, -1):
+    for i in range(5):
         date_str = dates[i].strftime('%d-%b')
         header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">{date_str}</th>\n'
         sub_idx += 1
