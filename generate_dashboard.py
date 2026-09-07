@@ -31,7 +31,7 @@ EXCEL_FILE = "NSE_Merged_Reports.xlsx"
 
 # COLOR CODING CONFIGURATION
 # Set to True to highlight price drops in Green and increases in Red as specified.
-INVERT_COLORS = True 
+INVERT_COLORS = False 
 
 def get_date_from_filename(filename):
     """Parses date from MTO_DDMMYYYY.DAT and returns a real datetime object for chronological sorting."""
