@@ -10,20 +10,29 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
-# Tickers updated for 2026 demergers (TMPV instead of TATAMOTORS, LTM instead of LTIM)
-NIFTY_50_SYMBOLS = [
+# Target Symbols list
+TARGET_SYMBOLS = [
     "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", 
-    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BPCL", "BHARTIARTL", 
-    "BRITANNIA", "CIPLA", "COALINDIA", "DIVISLAB", "DRREDDY", 
-    "EICHERMOT", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE", 
-    "HEROMOTOCO", "HINDALCO", "HINDUNILVR", "ICICIBANK", "ITC", 
-    "INDUSINDBK", "INFY", "JSWSTEEL", "KOTAKBANK", "LT", 
-    "LTM", "M&M", "MARUTI", "NTPC", "NESTLEIND", "ONGC", 
-    "POWERGRID", "RELIANCE", "SBILIFE", "SHRIRAMFIN", "SBIN", 
-    "SUNPHARMA", "TCS", "TATACONSUM", "TMPV", "TATASTEEL", 
-    "TECHM", "TITAN", "ULTRACEMCO", "WIPRO"
+    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BPCL", 
+    "BHARTIARTL", "BRITANNIA", "CIPLA", "COALINDIA", "DIVISLAB", 
+    "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM", "HCLTECH", 
+    "HDFCBANK", "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "HINDUNILVR", 
+    "ICICIBANK", "INDIGO", "INDUSINDBK", "INFY", "JIOFIN", 
+    "JSWSTEEL", "KOTAKBANK", "LT", "M&M", "MARUTI", 
+    "MAXHEALTH", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", 
+    "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN", "SUNPHARMA", 
+    "TATACONSUM", "TMPV", "TATASTEEL", "TCS", "TECHM", 
+    "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"
 ]
+
+EXCEL_FILE = "NSE_Merged_Reports.xlsx"
+
+# COLOR CODING CONFIGURATION
+# Set to True to highlight price drops in Green and increases in Red as specified.
+INVERT_COLORS = False
 
 def is_valid_file(filepath):
     if not os.path.exists(filepath):
@@ -107,7 +116,7 @@ def sync_reports():
 def parse_mto_file(filepath):
     rows = []
     if not os.path.exists(filepath):
-        return pd.DataFrame(columns=['SYMBOL', 'DEL_PCT'])
+        return pd.DataFrame(columns=['SYMBOL', 'DEL_QTY', 'DEL_PCT'])
     with open(filepath, 'r') as f:
         for line in f:
             parts = [p.strip() for p in line.split(',')]
@@ -115,42 +124,41 @@ def parse_mto_file(filepath):
                 symbol = parts[2]
                 series = parts[3]
                 try:
+                    del_qty = int(parts[5])
                     del_pct = float(parts[6])
                 except ValueError:
+                    del_qty = None
                     del_pct = None
-                rows.append({'SYMBOL': symbol, 'SERIES': series, 'DEL_PCT': del_pct})
+                rows.append({'SYMBOL': symbol, 'SERIES': series, 'DEL_QTY': del_qty, 'DEL_PCT': del_pct})
     df = pd.DataFrame(rows)
     if not df.empty:
         df = df[df['SERIES'] == 'EQ']
     else:
-        df = pd.DataFrame(columns=['SYMBOL', 'DEL_PCT'])
+        df = pd.DataFrame(columns=['SYMBOL', 'DEL_QTY', 'DEL_PCT'])
     return df
 
-def get_nifty_price_data():
-    tickers = [f"{sym}.NS" for sym in NIFTY_50_SYMBOLS]
+def fetch_historical_price_data(dates_list):
+    if not dates_list:
+        return pd.DataFrame(), pd.DataFrame()
+    min_date = min(dates_list)
+    max_date = max(dates_list)
+    
+    start_date_str = (min_date - timedelta(days=7)).strftime('%Y-%m-%d')
+    end_date_str = (max_date + timedelta(days=3)).strftime('%Y-%m-%d')
+    
+    tickers = [f"{sym}.NS" for sym in TARGET_SYMBOLS]
+    print(f"Downloading historical pricing from {start_date_str} to {end_date_str}...")
     try:
-        df_price = yf.download(tickers, period="5d", progress=False)
-        close_df = df_price['Close'] if 'Close' in df_price else df_price
-        last_row = close_df.iloc[-1]
-        prev_row = close_df.iloc[-2]
-        pct_change = ((last_row - prev_row) / prev_row) * 100
+        price_data = yf.download(tickers, start=start_date_str, end=end_date_str, progress=False)
+        close_df = price_data['Close'] if 'Close' in price_data else price_data
+        change_df = close_df.pct_change() * 100
         
-        pct_change.index = [t.replace('.NS', '') for t in pct_change.index]
-        last_prices = last_row.copy()
-        last_prices.index = [t.replace('.NS', '') for t in last_prices.index]
-        
-        price_summary = pd.DataFrame({
-            'SYMBOL': pct_change.index,
-            'PRICE': last_prices.values,
-            'PCT_CHANGE': pct_change.values
-        }).dropna()
-        
-        gainers = price_summary.sort_values(by='PCT_CHANGE', ascending=False).head(4).to_dict('records')
-        losers = price_summary.sort_values(by='PCT_CHANGE', ascending=True).head(4).to_dict('records')
-        return gainers, losers
+        close_df.index = pd.to_datetime(close_df.index).date
+        change_df.index = pd.to_datetime(change_df.index).date
+        return close_df, change_df
     except Exception as e:
-        print(f"Error fetching market prices: {e}")
-        return [], []
+        print(f"Error fetching historical prices: {e}")
+        return pd.DataFrame(), pd.DataFrame()
 
 def get_recipient_email():
     if os.path.exists('email.txt'):
@@ -161,93 +169,362 @@ def get_recipient_email():
             pass
     return None
 
-def generate_email_body_html(valid_filenames, gainers, losers, pages_url):
-    """Generates a beautiful email body using inline-styled universal HTML compatible with modern email clients."""
-    last_updated = datetime.now().strftime('%d-%b-%Y %I:%M %p')
+def build_master_dashboard_data(valid_filenames):
+    """Processes historical daily reports, performs calculations, and returns sorted dashboard dataframes."""
+    target_filenames = valid_filenames[:5]
     
-    # 1. Compile Table Rows
-    table_rows = ""
-    for i in range(4):
-        g_sym = gainers[i]['SYMBOL'] if i < len(gainers) else "—"
-        g_chg = f"+{gainers[i]['PCT_CHANGE']:.2f}%" if i < len(gainers) else "—"
-        g_color = "#34d399" if i < len(gainers) else "#94a3b8"
+    dates = []
+    for f in target_filenames:
+        match = re.search(r'MTO_(\d{8})\.DAT', f)
+        dates.append(datetime.strptime(match.group(1), '%d%m%Y') if match else datetime.min)
         
-        l_sym = losers[i]['SYMBOL'] if i < len(losers) else "—"
-        l_chg = f"{losers[i]['PCT_CHANGE']:.2f}%" if i < len(losers) else "—"
-        l_color = "#f87171" if i < len(losers) else "#94a3b8"
+    close_df, change_df = fetch_historical_price_data(dates)
+    
+    # Chronological: oldest first (D-4, D-3, D-2, D-1, D-0)
+    chronological_indices = list(range(len(target_filenames) - 1, -1, -1))
+    master_df = pd.DataFrame({'SYMBOL': TARGET_SYMBOLS})
+    
+    for i in chronological_indices:
+        filename = target_filenames[i]
+        dt = dates[i]
+        date_str = dt.strftime('%d-%b-%Y')
         
-        table_rows += f"""
-        <tr style="border-bottom: 1px solid #334155;">
-            <td style="padding: 10px; text-align: left; font-weight: bold; color: #f1f5f9; font-size: 14px;">{g_sym}</td>
-            <td style="padding: 10px; text-align: right; font-weight: bold; color: {g_color}; font-size: 14px;">{g_chg}</td>
-            <td style="padding: 10px; text-align: left; font-weight: bold; color: #f1f5f9; font-size: 14px;">{l_sym}</td>
-            <td style="padding: 10px; text-align: right; font-weight: bold; color: {l_color}; font-size: 14px;">{l_chg}</td>
-        </tr>
-        """
+        df_mto = parse_mto_file(os.path.join('reports', filename))
         
-    # 2. Compile Report File List
-    file_list_items = ""
-    for filename in valid_filenames:
-        match = re.search(r'MTO_(\d{8})\.DAT', filename)
-        date_label = datetime.strptime(match.group(1), '%d%m%Y').strftime('%d-%b-%Y') if match else ""
-        file_list_items += f"""
-        <li style="margin-bottom: 6px; font-size: 13px;">
-            <code style="background-color: #1e293b; padding: 3px 6px; border-radius: 4px; color: #38bdf8; font-family: monospace; font-size: 13px;">{filename}</code> 
-            <span style="color: #94a3b8; margin-left: 8px;">({date_label})</span>
-        </li>
-        """
+        pct_col = f"Del% ({date_str})"
+        qty_col = f"Del Qty ({date_str})"
+        prc_col = f"Price ({date_str})"
+        
+        df_mto = df_mto.rename(columns={'DEL_PCT': pct_col, 'DEL_QTY': qty_col})
+        master_df = pd.merge(master_df, df_mto[['SYMBOL', pct_col, qty_col]], on='SYMBOL', how='left')
+        
+        prices = []
+        for symbol in TARGET_SYMBOLS:
+            ticker = f"{symbol}.NS"
+            price_val = None
+            if not close_df.empty and ticker in close_df.columns:
+                target_date = dt.date()
+                if target_date in close_df.index:
+                    val = close_df.loc[target_date, ticker]
+                    if isinstance(val, pd.Series):
+                        val = val.iloc[0]
+                    if pd.notna(val):
+                        price_val = val
+            prices.append(price_val)
+            
+        master_df[prc_col] = prices
 
-    # 3. Clean CSS Wrapped layout
-    return f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f1f5f9; padding: 32px 24px; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #1e293b;">
+    today_str = dates[0].strftime('%d-%b-%Y')
+    yesterday_str = dates[1].strftime('%d-%b-%Y')
+    
+    t_pct = f"Del% ({today_str})"
+    y_pct = f"Del% ({yesterday_str})"
+    t_qty = f"Del Qty ({today_str})"
+    y_qty = f"Del Qty ({yesterday_str})"
+    t_prc = f"Price ({today_str})"
+    y_prc = f"Price ({yesterday_str})"
+    
+    hist_pct_cols = [f"Del% ({dates[j].strftime('%d-%b-%Y')})" for j in range(1, 5)]
+    hist_qty_cols = [f"Del Qty ({dates[j].strftime('%d-%b-%Y')})" for j in range(1, 5)]
+
+    master_df['Diff % vs Yesterday'] = master_df[t_pct] - master_df[y_pct]
+    master_df['Diff % vs Avg4'] = master_df[t_pct] - master_df[hist_pct_cols].mean(axis=1)
+    master_df['Diff Qty vs Yesterday'] = master_df[t_qty] - master_df[y_qty]
+    master_df['Diff Qty vs Avg4'] = master_df[t_qty] - master_df[hist_qty_cols].mean(axis=1)
+    master_df['Price Change %'] = ((master_df[t_prc] - master_df[y_prc]) / master_df[y_prc]) * 100
+
+    master_df = master_df.sort_values(by='Diff % vs Yesterday', ascending=False, na_position='last')
+    
+    gainers = []
+    losers = []
+    if not change_df.empty:
+        today_date = dates[0].date()
+        today_changes = change_df.loc[today_date] if today_date in change_df.index else pd.Series()
+        if not today_changes.empty:
+            today_changes.index = [t.replace('.NS', '') for t in today_changes.index]
+            today_prices = close_df.loc[today_date]
+            today_prices.index = [t.replace('.NS', '') for t in today_prices.index]
+            
+            summary = pd.DataFrame({
+                'SYMBOL': today_changes.index,
+                'PRICE': today_prices.values,
+                'PCT_CHANGE': today_changes.values
+            }).dropna()
+            
+            # Keep only targets that are in Nifty 50 array
+            summary = summary[summary['SYMBOL'].isin(TARGET_SYMBOLS)]
+            gainers = summary.sort_values(by='PCT_CHANGE', ascending=False).head(4).to_dict('records')
+            losers = summary.sort_values(by='PCT_CHANGE', ascending=True).head(4).to_dict('records')
+
+    return master_df, chronological_indices, dates, gainers, losers
+
+def generate_html_content(df, dates, chronological_indices, gainers, losers):
+    """Generates an institutional-grade live dashboard with double-header grouping."""
+    
+    # Header Row 1: Primary structural groupings
+    header_row_1 = '<tr class="bg-slate-800 text-slate-300 border-b border-slate-700 text-xs font-bold uppercase tracking-wider text-center">\n'
+    header_row_1 += '  <th rowspan="2" onclick="sortTable(0)" class="px-4 py-3 text-left cursor-pointer hover:bg-slate-700 min-w-[140px] vertical-align-middle">Symbol</th>\n'
+    
+    col_idx = 1
+    for i in chronological_indices:
+        date_str = dates[i].strftime('%d-%b-%Y')
+        header_row_1 += f'  <th colspan="3" class="px-4 py-2 border-l border-slate-700 text-center">{date_str}</th>\n'
+        col_idx += 3
         
-        <h2 style="color: #ffffff; margin-top: 0; margin-bottom: 8px; font-size: 22px; font-weight: 800; display: flex; align-items: center;">
-            📊 NSE Delivery & Price Dashboard
-        </h2>
-        <p style="color: #94a3b8; font-size: 14px; margin-top: 0; margin-bottom: 24px; line-height: 1.5;">
-            The daily sync run has successfully verified the <strong>7 most recent trading sessions</strong>.
-        </p>
+    header_row_1 += f'  <th colspan="2" class="px-4 py-2 border-l border-slate-700 text-center">Del% Diff</th>\n'
+    header_row_1 += f'  <th colspan="2" class="px-4 py-2 border-l border-slate-700 text-center">Del Qty Diff</th>\n'
+    header_row_1 += f'  <th rowspan="2" onclick="sortTable({col_idx+4})" class="px-4 py-3 text-right cursor-pointer hover:bg-slate-700 border-l border-slate-700 vertical-align-middle">Price Change %</th>\n'
+    header_row_1 += '</tr>\n'
+
+    # Header Row 2: Individual variables
+    header_row_2 = '<tr class="bg-slate-800/80 text-slate-400 border-b border-slate-700 text-[10px] uppercase tracking-wider text-right">\n'
+    
+    sub_col_idx = 1
+    for _ in chronological_indices:
+        header_row_2 += f'  <th onclick="sortTable({sub_col_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">Del%</th>\n'
+        header_row_2 += f'  <th onclick="sortTable({sub_col_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">Del Qty</th>\n'
+        header_row_2 += f'  <th onclick="sortTable({sub_col_idx+2})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">Price</th>\n'
+        sub_col_idx += 3
         
-        <div style="margin-bottom: 32px; margin-top: 10px;">
-            <a href="{pages_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; border-radius: 6px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                🔗 Click here to open your Live Dashboard
-            </a>
+    header_row_2 += f'  <th onclick="sortTable({sub_col_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_col_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_col_idx+2})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_col_idx+3})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
+    header_row_2 += '</tr>\n'
+
+    # Build Rows
+    rows_html = ""
+    for _, row in df.iterrows():
+        sym = row['SYMBOL']
+        rows_html += f'<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">\n'
+        rows_html += f'  <td class="px-4 py-3 text-sm font-bold text-slate-100">{sym}</td>\n'
+        
+        for i in chronological_indices:
+            date_str = dates[i].strftime('%d-%b-%Y')
+            pct = row[f"Del% ({date_str})"]
+            qty = row[f"Del Qty ({date_str})"]
+            prc = row[f"Price ({date_str})"]
+            
+            pct_str = f"{pct:.2f}%" if pd.notna(pct) else "—"
+            qty_str = f"{int(qty):,}" if pd.notna(qty) else "—"
+            prc_str = f"₹{prc:,.2f}" if pd.notna(prc) else "—"
+            
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="{pct if pd.notna(pct) else -1}">{pct_str}</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="{qty if pd.notna(qty) else -1}">{qty_str}</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="{prc if pd.notna(prc) else -1}">{prc_str}</td>\n'
+            
+        for col_name in ['Diff % vs Yesterday', 'Diff % vs Avg4']:
+            val = row[col_name]
+            if pd.isna(val):
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>\n'
+            else:
+                color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
+                sign = "+" if val > 0 else ""
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{val}">{sign}{val:.2f}%</td>\n'
+                
+        for col_name in ['Diff Qty vs Yesterday', 'Diff Qty vs Avg4']:
+            val = row[col_name]
+            if pd.isna(val):
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999999999">—</td>\n'
+            else:
+                color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
+                sign = "+" if val > 0 else ""
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{val}">{sign}{int(val):,}</td>\n'
+
+        val = row['Price Change %']
+        if pd.isna(val):
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>\n'
+        else:
+            if INVERT_COLORS:
+                color_class = "text-emerald-400 font-semibold" if val < 0 else "text-rose-400 font-semibold" if val > 0 else "text-slate-400"
+            else:
+                color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
+            sign = "+" if val > 0 else ""
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{val}">{sign}{val:.2f}%</td>\n'
+            
+        rows_html += f'</tr>\n'
+
+    gainers_html = "".join([
+        f'<div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">'
+        f'  <div class="text-xs text-slate-400 font-bold tracking-wider">{g["SYMBOL"]}</div>'
+        f'  <div class="flex items-baseline justify-between mt-1">'
+        f'    <span class="text-lg font-extrabold text-slate-100">₹{g["PRICE"]:.2f}</span>'
+        f'    <span class="text-sm font-bold text-emerald-400">+{g["PCT_CHANGE"]:.2f}%</span>'
+        f'  </div>'
+        f'</div>' for g in gainers
+    ])
+    
+    losers_html = "".join([
+        f'<div class="bg-slate-800 border-l-4 border-rose-500 rounded p-4 shadow-sm">'
+        f'  <div class="text-xs text-slate-400 font-bold tracking-wider">{l["SYMBOL"]}</div>'
+        f'  <div class="flex items-baseline justify-between mt-1">'
+        f'    <span class="text-lg font-extrabold text-slate-100">₹{l["PRICE"]:.2f}</span>'
+        f'    <span class="text-sm font-bold text-rose-400">{l["PCT_CHANGE"]:.2f}%</span>'
+        f'  </div>'
+        f'</div>' for l in losers
+    ])
+
+    last_updated = datetime.now().strftime('%d-%b-%Y %I:%M %p')
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Equity Delivery & Price Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body {{ background-color: #0f172a; }}</style>
+</head>
+<body class="text-slate-100 font-sans min-h-screen font-medium">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-6 mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">NSE Delivery Tracker</h1>
+                <p class="text-sm text-slate-400 mt-1">Nifty 50 Deliverable Quantity & Price Action Overview</p>
+            </div>
+            <div>
+                <span class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-full inline-block font-semibold">
+                    Dashboard Updated: {last_updated} (IST)
+                </span>
+            </div>
         </div>
-        
-        <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
-            🚀 Today's Market Leaders (Nifty 50)
-        </h3>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
-            <thead>
-                <tr style="background-color: #1e293b; color: #94a3b8; font-size: 12px; text-transform: uppercase;">
-                    <th style="padding: 10px; text-align: left; font-weight: 600;">Top 4 Gainers</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600;">% Change</th>
-                    <th style="padding: 10px; text-align: left; font-weight: 600;">Top 4 Losers</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 600;">% Change</th>
-                </tr>
-            </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
-        </table>
-        
-        <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
-            📁 Synchronized Report Files (Last 7 Sessions)
-        </h3>
-        <ul style="padding-left: 0; list-style-type: none; margin-top: 0; margin-bottom: 0;">
-            {file_list_items}
-        </ul>
-        
-        <hr style="border: 0; border-top: 1px solid #334155; margin: 32px 0;">
-        <p style="color: #64748b; font-size: 11px; text-align: center; margin: 0; line-height: 1.4;">
-            This is an automated operational notification. <br>
-            Dashboard generation timestamp: {last_updated} IST.
-        </p>
-    </div>
-    """
 
-def send_email_dashboard(recipient, full_html, email_body_html):
-    """Dispatches the beautiful HTML summary in the email body, with full_html as an attachment."""
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div>
+                <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Top 4 Market Gainers
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">{gainers_html}</div>
+            </div>
+            <div>
+                <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-rose-500"></span> Top 4 Market Losers
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">{losers_html}</div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div class="p-5 border-b border-slate-800 bg-slate-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <input type="text" id="searchInput" placeholder="Search stock symbol..." 
+                    class="w-full sm:w-72 bg-slate-800 text-sm text-slate-100 placeholder-slate-500 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-slate-500">
+                <div class="text-xs text-slate-400">* Click sub-headers to sort columns</div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left border-collapse" id="dashboardTable">
+                    <thead class="bg-slate-800 text-slate-300 border-b border-slate-700">
+                        {header_row_1}
+                        {header_row_2}
+                    </thead>
+                    <tbody>{rows_html}</tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('searchInput').addEventListener('keyup', function() {{
+            let filter = this.value.toUpperCase();
+            let rows = document.getElementById('dashboardTable').getElementsByTagName('tr');
+            // Skip first 2 header rows
+            for (let i = 2; i < rows.length; i++) {{
+                let symbolCell = rows[i].getElementsByTagName('td')[0];
+                if (symbolCell) {{
+                    let txtValue = symbolCell.textContent || symbolCell.innerText;
+                    rows[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
+                }}
+            }}
+        }});
+
+        let currentSortDir = {{}};
+        function sortTable(columnIndex) {{
+            const table = document.getElementById("dashboardTable");
+            let rows = Array.from(table.rows).slice(2); // Skip both header rows
+            let dir = currentSortDir[columnIndex] === 'asc' ? 'desc' : 'asc';
+            currentSortDir = {{}};
+            currentSortDir[columnIndex] = dir;
+
+            rows.sort((rowA, rowB) => {{
+                let cellA = rowA.getElementsByTagName("TD")[columnIndex];
+                let cellB = rowB.getElementsByTagName("TD")[columnIndex];
+                let valA = cellA.getAttribute("data-sort") || cellA.textContent.trim();
+                let valB = cellB.getAttribute("data-sort") || cellB.textContent.trim();
+                let floatA = parseFloat(valA.replace(/[%₹,]/g, ''));
+                let floatB = parseFloat(valB.replace(/[%₹,]/g, ''));
+
+                if (!isNaN(floatA) && !isNaN(floatB)) {{
+                    return dir === 'asc' ? floatA - floatB : floatB - floatA;
+                }} else {{
+                    return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }}
+            }});
+            const tbody = table.getElementsByTagName('tbody')[0];
+            tbody.innerHTML = "";
+            rows.forEach(row => tbody.appendChild(row));
+        }}
+    </script>
+</body>
+</html>"""
+
+def write_to_excel_workbook(master_df, valid_filenames, dates, chronological_indices):
+    """Compiles ONLY the master Dashboard calculation dataframe into Sheet1 to keep file size lightweight."""
+    print(f"Compiling calculated records into lightweight '{EXCEL_FILE}'...")
+    
+    with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
+        # Write ONLY the master Dashboard calculations
+        master_df.to_excel(writer, sheet_name="Dashboard", index=False)
+
+    # Apply custom number formats and widths to Dashboard sheet
+    wb = load_workbook(EXCEL_FILE)
+    ws = wb["Dashboard"]
+    
+    # Auto-adjust column widths
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    # Apply styling & number formatting
+    total_dates = len(chronological_indices)
+    for r in range(2, len(TARGET_SYMBOLS) + 2):
+        for i in range(total_dates):
+            col_pct = 2 + (3 * i)
+            col_qty = 3 + (3 * i)
+            col_prc = 4 + (3 * i)
+            
+            # Divide percentages by 100 as openpyxl formats them natively
+            pct_val = ws.cell(row=r, column=col_pct).value
+            if isinstance(pct_val, (int, float)):
+                ws.cell(row=r, column=col_pct, value=pct_val / 100.0)
+            ws.cell(row=r, column=col_pct).number_format = '0.00%'
+            
+            ws.cell(row=r, column=col_qty).number_format = '#,##0'
+            ws.cell(row=r, column=col_prc).number_format = '₹#,##0.00'
+
+        # Format comparison columns
+        start_comp_col = 2 + (3 * total_dates)
+        
+        # Diff % columns (Yesterday & Avg4)
+        for offset in [0, 1]:
+            ws.cell(row=r, column=start_comp_col + offset).number_format = '+0.00%;-0.00%;0.00%'
+            val = ws.cell(row=r, column=start_comp_col + offset).value
+            if isinstance(val, (int, float)):
+                ws.cell(row=r, column=start_comp_col + offset, value=val / 100.0)
+
+        # Diff Qty columns (Yesterday & Avg4)
+        for offset in [2, 3]:
+            ws.cell(row=r, column=start_comp_col + offset).number_format = '+#,##0;-#,##0;0'
+
+        # Price Change % column (The last column)
+        ws.cell(row=r, column=start_comp_col + 4).number_format = '+0.00%;-0.00%;0.00%'
+        val = ws.cell(row=r, column=start_comp_col + 4).value
+        if isinstance(val, (int, float)):
+            ws.cell(row=r, column=start_comp_col + 4, value=val / 100.0)
+
+    wb.save(EXCEL_FILE)
+    print("Lightweight Excel workbook saved and styled.")
+
+def send_email_dashboard(recipient, html_content, email_body_html):
+    """Sends the formatted email with the live hosted button and attaches the final calculation Excel file."""
     smtp_server = os.environ.get('SMTP_SERVER')
     smtp_port = os.environ.get('SMTP_PORT', '587')
     smtp_user = os.environ.get('SMTP_USER')
@@ -257,21 +534,31 @@ def send_email_dashboard(recipient, full_html, email_body_html):
         print("SMTP credentials are not fully configured. Email dispatch skipped.")
         return
 
-    msg = MIMEMultipart('alternative')
+    msg = MIMEMultipart('mixed')
     msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
+    
+    from email.utils import formataddr
     msg['From'] = "DailyStats"
     msg['To'] = recipient
 
-    # Add safe inline HTML as the body
+    msg_alternative = MIMEMultipart('alternative')
+    msg.attach(msg_alternative)
+    
     part_html = MIMEText(email_body_html, 'html')
-    msg.attach(part_html)
+    msg_alternative.attach(part_html)
 
-    # Attach the full interactive index.html as a file attachment
-    part_file = MIMEBase('application', 'octet-stream')
-    part_file.set_payload(full_html.encode('utf-8'))
-    encoders.encode_base64(part_file)
-    part_file.add_header('Content-Disposition', 'attachment; filename="dashboard.html"')
-    msg.attach(part_file)
+    # Attach the Compiled Excel Worksheet
+    if os.path.exists(EXCEL_FILE):
+        part_file = MIMEBase('application', 'octet-stream')
+        try:
+            with open(EXCEL_FILE, 'rb') as f:
+                part_file.set_payload(f.read())
+            encoders.encode_base64(part_file)
+            part_file.add_header('Content-Disposition', f'attachment; filename="{EXCEL_FILE}"')
+            msg.attach(part_file)
+            print(f"Attached lightweight calculation worksheet: '{EXCEL_FILE}'")
+        except Exception as e:
+            print(f"Error attaching calculation worksheet: {e}")
 
     try:
         server = smtplib.SMTP(smtp_server, int(smtp_port))
@@ -307,236 +594,34 @@ def write_github_summary(valid_filenames, gainers, losers):
             l_sym = losers[i]['SYMBOL'] if i < len(losers) else "—"
             l_chg = f"{losers[i]['PCT_CHANGE']:.2f}%" if i < len(losers) else "—"
             f.write(f"| **{g_sym}** | {g_chg} | **{l_sym}** | {l_chg} |\n")
-            
-        f.write("\n---\n\n")
-        f.write("### 📂 Synchronized Report Files (Last 7 Sessions)\n")
-        for filename in valid_filenames:
-            match = re.search(r'MTO_(\d{8})\.DAT', filename)
-            if match:
-                dt = datetime.strptime(match.group(1), '%d%m%Y')
-                f.write(f"- `{filename}` ({dt.strftime('%d-%b-%Y')})\n")
-            else:
-                f.write(f"- `{filename}`\n")
-
-def build_dashboard(valid_filenames):
-    master_df = pd.DataFrame({'SYMBOL': NIFTY_50_SYMBOLS})
-    col_names = []
-    
-    for i, filename in enumerate(valid_filenames):
-        match = re.search(r'MTO_(\d{8})\.DAT', filename)
-        if match:
-            dt = datetime.strptime(match.group(1), '%d%m%Y')
-            formatted_date = dt.strftime('%d-%b')
-        else:
-            formatted_date = f"D-{i}"
-            
-        col_name = "Del% Today" if i == 0 else f"Del% {formatted_date}"
-        col_names.append(col_name)
-        
-        df_mto = parse_mto_file(os.path.join('reports', filename))
-        df_mto = df_mto.rename(columns={'DEL_PCT': col_name})
-        master_df = pd.merge(master_df, df_mto[['SYMBOL', col_name]], on='SYMBOL', how='left')
-
-    del_today = "Del% Today"
-    del_historical = [c for c in col_names if c != del_today]
-
-    if del_today in master_df.columns and len(del_historical) > 0:
-        prev_day_col = del_historical[0]
-        master_df['Diff vs D-1'] = master_df[del_today] - master_df[prev_day_col]
-        master_df['Diff vs Avg4'] = master_df[del_today] - master_df[del_historical[:4]].mean(axis=1)
-    else:
-        master_df['Diff vs D-1'] = None
-        master_df['Diff vs Avg4'] = None
-
-    master_df = master_df.sort_values(by='Diff vs D-1', ascending=False, na_position='last')
-    gainers, losers = get_nifty_price_data()
-    
-    html_content = generate_html_content(master_df, del_today, del_historical, gainers, losers)
-    return html_content, gainers, losers
-
-def generate_html_content(df, today_col, historical_cols, gainers, losers):
-    header_cols_html = f'<th onclick="sortTable(0)" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Symbol</th>\n'
-    header_cols_html += f'<th onclick="sortTable(1)" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">{today_col}</th>\n'
-    
-    col_idx = 2
-    for h_col in historical_cols[:4]:
-        header_cols_html += f'<th onclick="sortTable({col_idx})" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">{h_col}</th>\n'
-        col_idx += 1
-        
-    header_cols_html += f'<th onclick="sortTable({col_idx})" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Diff vs D-1</th>\n'
-    header_cols_html += f'<th onclick="sortTable({col_idx+1})" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-700">Diff vs Avg4</th>\n'
-
-    rows_html = ""
-    for _, row in df.iterrows():
-        sym = row['SYMBOL']
-        today_val = row[today_col]
-        t_val_str = f"{today_val:.2f}" if pd.notna(today_val) else "—"
-        
-        rows_html += f'<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">\n'
-        rows_html += f'  <td class="px-4 py-3 text-sm font-bold text-slate-100">{sym}</td>\n'
-        rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="{today_val if pd.notna(today_val) else -1}">{t_val_str}</td>\n'
-        
-        for h_col in historical_cols[:4]:
-            h_val = row[h_col]
-            h_val_str = f"{h_val:.2f}" if pd.notna(h_val) else "—"
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="{h_val if pd.notna(h_val) else -1}">{h_val_str}</td>\n'
-            
-        diff_d1 = row['Diff vs D-1']
-        diff_avg4 = row['Diff vs Avg4']
-        
-        for diff_val in [diff_d1, diff_avg4]:
-            if pd.isna(diff_val):
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>\n'
-            else:
-                color_class = "text-emerald-400 font-semibold" if diff_val > 0 else "text-rose-400 font-semibold" if diff_val < 0 else "text-slate-400"
-                sign = "+" if diff_val > 0 else ""
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{diff_val}">{sign}{diff_val:.2f}%</td>\n'
-        rows_html += f'</tr>\n'
-
-    gainers_html = "".join([
-        f'<div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">'
-        f'  <div class="text-xs text-slate-400 font-bold tracking-wider">{g["SYMBOL"]}</div>'
-        f'  <div class="flex items-baseline justify-between mt-1">'
-        f'    <span class="text-lg font-extrabold text-slate-100">₹{g["PRICE"]:.2f}</span>'
-        f'    <span class="text-sm font-bold text-emerald-400">+{g["PCT_CHANGE"]:.2f}%</span>'
-        f'  </div>'
-        f'</div>' for g in gainers
-    ])
-    
-    losers_html = "".join([
-        f'<div class="bg-slate-800 border-l-4 border-rose-500 rounded p-4 shadow-sm">'
-        f'  <div class="text-xs text-slate-400 font-bold tracking-wider">{l["SYMBOL"]}</div>'
-        f'  <div class="flex items-baseline justify-between mt-1">'
-        f'    <span class="text-lg font-extrabold text-slate-100">₹{l["PRICE"]:.2f}</span>'
-        f'    <span class="text-sm font-bold text-rose-400">{l["PCT_CHANGE"]:.2f}%</span>'
-        f'  </div>'
-        f'</div>' for l in losers
-    ])
-
-    last_updated = datetime.now().strftime('%d-%b-%Y %I:%M %p')
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NSE Equity Delivery & Price Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>body {{ background-color: #0f172a; }}</style>
-</head>
-<body class="text-slate-100 font-sans min-h-screen">
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-6 mb-8 gap-4">
-            <div>
-                <h1 class="text-3xl font-extrabold text-white tracking-tight">NSE Delivery Tracker</h1>
-                <p class="text-sm text-slate-400 mt-1">Nifty 50 Deliverable Quantity & Price Action Overview</p>
-            </div>
-            <div>
-                <span class="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-full inline-block">
-                    Dashboard Updated: {last_updated} (IST)
-                </span>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <div>
-                <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
-                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Top 4 Market Gainers
-                </h2>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">{gainers_html}</div>
-            </div>
-            <div>
-                <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
-                    <span class="h-2 w-2 rounded-full bg-rose-500"></span> Top 4 Market Losers
-                </h2>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">{losers_html}</div>
-            </div>
-        </div>
-
-        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-            <div class="p-5 border-b border-slate-800 bg-slate-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <input type="text" id="searchInput" placeholder="Search stock symbol..." 
-                    class="w-full sm:w-72 bg-slate-800 text-sm text-slate-100 placeholder-slate-500 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-slate-500">
-                <div class="text-xs text-slate-400">* Click headers to sort</div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left border-collapse" id="dashboardTable">
-                    <thead class="bg-slate-800 text-slate-300 border-b border-slate-700">
-                        <tr>{header_cols_html}</tr>
-                    </thead>
-                    <tbody>{rows_html}</tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    <script>
-        document.getElementById('searchInput').addEventListener('keyup', function() {{
-            let filter = this.value.toUpperCase();
-            let rows = document.getElementById('dashboardTable').getElementsByTagName('tr');
-            for (let i = 1; i < rows.length; i++) {{
-                let symbolCell = rows[i].getElementsByTagName('td')[0];
-                if (symbolCell) {{
-                    let txtValue = symbolCell.textContent || symbolCell.innerText;
-                    rows[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
-                }}
-            }}
-        }});
-
-        let currentSortDir = {{}};
-        function sortTable(columnIndex) {{
-            const table = document.getElementById("dashboardTable");
-            let rows = Array.from(table.rows).slice(1);
-            let dir = currentSortDir[columnIndex] === 'asc' ? 'desc' : 'asc';
-            currentSortDir = {{}};
-            currentSortDir[columnIndex] = dir;
-
-            rows.sort((rowA, rowB) => {{
-                let cellA = rowA.getElementsByTagName("TD")[columnIndex];
-                let cellB = rowB.getElementsByTagName("TD")[columnIndex];
-                let valA = cellA.getAttribute("data-sort") || cellA.textContent.trim();
-                let valB = cellB.getAttribute("data-sort") || cellB.textContent.trim();
-                let floatA = parseFloat(valA);
-                let floatB = parseFloat(valB);
-
-                if (!isNaN(floatA) && !isNaN(floatB)) {{
-                    return dir === 'asc' ? floatA - floatB : floatB - floatA;
-                }} else {{
-                    return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-                }}
-            }});
-            const tbody = table.getElementsByTagName('tbody')[0];
-            tbody.innerHTML = "";
-            rows.forEach(row => tbody.appendChild(row));
-        }}
-    </script>
-</body>
-</html>"""
 
 def main():
-    # 1. Sync & track 7 files
+    # 1. Sync & track files
     valid_filenames = sync_reports()
     
-    # 2. Compile dashboard structure
-    html_content, gainers, losers = build_dashboard(valid_filenames)
+    # 2. Build master dashboard calculations
+    master_df, chronological_indices, dates, gainers, losers = build_master_dashboard_data(valid_filenames)
     
-    # 3. Write locally to index.html (for GitHub Pages hosting)
+    # 3. Compile Lightweight Master Excel spreadsheet (Dashboard sheet only)
+    write_to_excel_workbook(master_df, valid_filenames, dates, chronological_indices)
+    
+    # 4. Generate local index.html page
+    html_content = generate_html_content(master_df, dates, chronological_indices, gainers, losers)
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
+    print("Dashboard local file written successfully.")
 
-    # 4. Write Markdown Report to GitHub Actions Summary (Job Summary)
+    # 5. Write GTH Summary
     write_github_summary(valid_filenames, gainers, losers)
 
-    # 5. Send custom HTML email if email.txt and secrets exist
+    # 6. Dispatch email containing clean summary body and lightweight Excel attachment
     recipient = get_recipient_email()
     if recipient:
-        # Generate the safe, beautiful inline-styled HTML for email clients
         repo = os.environ.get('GITHUB_REPOSITORY', 'username/repo')
         owner, repo_name = repo.split('/')
         pages_url = f"https://{owner}.github.io/{repo_name}/"
         
         email_body_html = generate_email_body_html(valid_filenames, gainers, losers, pages_url)
-        
-        # Dispatch email
         send_email_dashboard(recipient, html_content, email_body_html)
     else:
         print("No target recipient found in email.txt.")
