@@ -31,7 +31,7 @@ EXCEL_FILE = "NSE_Merged_Reports.xlsx"
 
 # COLOR CODING CONFIGURATION
 # Set to True to highlight price drops in Green and increases in Red as specified.
-INVERT_COLORS = True 
+INVERT_COLORS = False 
 
 def is_valid_file(filepath):
     if not os.path.exists(filepath):
@@ -318,12 +318,12 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
         sub_idx += 1
         
     # 4. Sub-headers for Del% Diff (Cols 16 & 17)
-    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yesterday</th>\n'
     header_row_2 += f'  <th onclick="sortTable({sub_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
     sub_idx += 2
     
     # 5. Sub-headers for Del Qty Diff (Cols 18 & 19)
-    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yesterday</th>\n'
     header_row_2 += f'  <th onclick="sortTable({sub_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
     
     header_row_2 += '</tr>\n'
@@ -336,21 +336,21 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
         rows_html += f'  <td class="px-4 py-3 text-sm font-bold text-slate-100">{sym}</td>\n'
         
         # 1. Close Prices (oldest to newest)
-        for i in range(4, -1, -1):
+        for i in range(5): 
             date_str = dates[i].strftime('%d-%b-%Y')
             val = row[f"Price ({date_str})"]
             val_str = f"₹{val:,.2f}" if pd.notna(val) else "—"
             rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
         # 2. Delivery % (oldest to newest)
-        for i in range(4, -1, -1):
+        for i in range(5): 
             date_str = dates[i].strftime('%d-%b-%Y')
             val = row[f"Del% ({date_str})"]
             val_str = f"{val:.2f}%" if pd.notna(val) else "—"
             rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
         # 3. Delivery Quantity (oldest to newest)
-        for i in range(4, -1, -1):
+        for i in range(5): 
             date_str = dates[i].strftime('%d-%b-%Y')
             val = row[f"Del Qty ({date_str})"]
             val_str = f"{int(val):,}" if pd.notna(val) else "—"
