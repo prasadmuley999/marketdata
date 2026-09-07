@@ -15,23 +15,34 @@ from openpyxl.utils import get_column_letter
 
 # Target Symbols list
 TARGET_SYMBOLS = [
-    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
-    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BHARTIARTL",
-    "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT", "ETERNAL",
-    "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE", "HINDALCO",
-    "HINDUNILVR", "ICICIBANK", "ITC", "INFY", "INDIGO",
-    "JSWSTEEL", "JIOFIN", "KOTAKBANK", "LT", "M&M",
-    "MARUTI", "MAXHEALTH", "NTPC", "NESTLEIND", "ONGC",
-    "POWERGRID", "RELIANCE", "SBILIFE", "SHRIRAMFIN", "SBIN",
-    "SUNPHARMA", "TCS", "TATACONSUM", "TMPV", "TATASTEEL",
-    "TECHM", "TITAN", "TRENT", "ULTRACEMCO", "WIPRO",
+    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", 
+    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BPCL", 
+    "BHARTIARTL", "BRITANNIA", "CIPLA", "COALINDIA", "DIVISLAB", 
+    "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM", "HCLTECH", 
+    "HDFCBANK", "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "HINDUNILVR", 
+    "ICICIBANK", "INDIGO", "INDUSINDBK", "INFY", "JIOFIN", 
+    "JSWSTEEL", "KOTAKBANK", "LT", "M&M", "MARUTI", 
+    "MAXHEALTH", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", 
+    "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN", "SUNPHARMA", 
+    "TATACONSUM", "TATAMOTORS", "TATASTEEL", "TCS", "TECHM", 
+    "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"
 ]
 
 EXCEL_FILE = "NSE_Merged_Reports.xlsx"
 
 # COLOR CODING CONFIGURATION
 # Set to True to highlight price drops in Green and increases in Red as specified.
-INVERT_COLORS = False 
+INVERT_COLORS = True 
+
+def get_date_from_filename(filename):
+    """Parses date from MTO_DDMMYYYY.DAT and returns a real datetime object for chronological sorting."""
+    match = re.search(r'MTO_(\d{8})\.DAT', filename)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), '%d%m%Y')
+        except ValueError:
+            pass
+    return datetime.min
 
 def is_valid_file(filepath):
     if not os.path.exists(filepath):
@@ -110,7 +121,10 @@ def sync_reports():
             except Exception:
                 pass
                 
-    return sorted(list(keep_files), reverse=True)
+    # Sort files chronologically descending (newest first)
+    keep_files_list = list(keep_files)
+    keep_files_list.sort(key=get_date_from_filename, reverse=True)
+    return keep_files_list
 
 def parse_mto_file(filepath):
     rows = []
@@ -170,17 +184,18 @@ def get_recipient_email():
 
 def build_master_dashboard_data(valid_filenames):
     """Processes historical daily reports, performs calculations, and returns sorted dashboard dataframes."""
+    # Group dates from newest (D-0) to oldest (D-4)
     target_filenames = valid_filenames[:5]
     
     dates = []
     for f in target_filenames:
-        match = re.search(r'MTO_(\d{8})\.DAT', f)
-        dates.append(datetime.strptime(match.group(1), '%d%m%Y') if match else datetime.min)
+        dates.append(get_date_from_filename(f))
         
     close_df, change_df = fetch_historical_price_data(dates)
     
-    # Process files in chronological order: oldest first (D-4, D-3, D-2, D-1, D-0)
-    chronological_dates = [dates[i] for i in range(4, -1, -1)]
+    # Sort filenames and dates chronologically ascending: oldest first (D-4, D-3, D-2, D-1, D-0)
+    chronological_filenames = sorted(target_filenames, key=get_date_from_filename)
+    chronological_dates = sorted(dates)
     chronological_date_strs = [d.strftime('%d-%b-%Y') for d in chronological_dates]
     
     today_str = dates[0].strftime('%d-%b-%Y')
@@ -190,8 +205,7 @@ def build_master_dashboard_data(valid_filenames):
     # Parse daily reports into fast lookups
     mto_lookups = {}
     for filename in target_filenames:
-        match = re.search(r'MTO_(\d{8})\.DAT', filename)
-        dt = datetime.strptime(match.group(1), '%d%m%Y')
+        dt = get_date_from_filename(filename)
         date_str = dt.strftime('%d-%b-%Y')
         df_mto = parse_mto_file(os.path.join('reports', filename))
         mto_lookups[date_str] = df_mto.set_index('SYMBOL').to_dict('index')
@@ -235,7 +249,7 @@ def build_master_dashboard_data(valid_filenames):
         
     master_df = pd.DataFrame(rows)
 
-    # Perform required math comparisons
+    # Perform required comparisons
     t_pct_col = f"Del% ({today_str})"
     y_pct_col = f"Del% ({yesterday_str})"
     t_qty_col = f"Del Qty ({today_str})"
@@ -277,9 +291,9 @@ def build_master_dashboard_data(valid_filenames):
             gainers = summary.sort_values(by='PCT_CHANGE', ascending=False).head(4).to_dict('records')
             losers = summary.sort_values(by='PCT_CHANGE', ascending=True).head(4).to_dict('records')
 
-    # Chronological index offsets are passed back to construct double headers cleanly
-    chronological_indices = list(range(len(target_filenames) - 1, -1, -1))
-    return master_df, chronological_indices, dates, gainers, losers
+    # Retain index ranges to cleanly map double-headers
+    chronological_indices = list(range(4, -1, -1))
+    return master_df, chronological_indices, chronological_dates, gainers, losers
 
 def generate_html_content(df, dates, chronological_indices, gainers, losers):
     """Generates an institutional-grade live dashboard with double-header grouping."""
@@ -318,12 +332,12 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
         sub_idx += 1
         
     # 4. Sub-headers for Del% Diff (Cols 16 & 17)
-    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yesterday</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
     header_row_2 += f'  <th onclick="sortTable({sub_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
     sub_idx += 2
     
     # 5. Sub-headers for Del Qty Diff (Cols 18 & 19)
-    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yesterday</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
     header_row_2 += f'  <th onclick="sortTable({sub_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
     
     header_row_2 += '</tr>\n'
@@ -336,60 +350,57 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
         rows_html += f'  <td class="px-4 py-3 text-sm font-bold text-slate-100">{sym}</td>\n'
         
         # 1. Close Prices (oldest to newest)
-        for i in range(5): 
+        for i in range(5):
             date_str = dates[i].strftime('%d-%b-%Y')
             val = row[f"Price ({date_str})"]
             val_str = f"₹{val:,.2f}" if pd.notna(val) else "—"
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300 border-l border-slate-75" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
         # 2. Delivery % (oldest to newest)
-        for i in range(5): 
+        for i in range(5):
             date_str = dates[i].strftime('%d-%b-%Y')
             val = row[f"Del% ({date_str})"]
             val_str = f"{val:.2f}%" if pd.notna(val) else "—"
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-75" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
         # 3. Delivery Quantity (oldest to newest)
-        for i in range(5): 
+        for i in range(5):
             date_str = dates[i].strftime('%d-%b-%Y')
             val = row[f"Del Qty ({date_str})"]
             val_str = f"{int(val):,}" if pd.notna(val) else "—"
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-75" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
         # 4. Del% Diff (vs Yest, vs Avg4)
         for col_name in ['Diff % vs Yesterday', 'Diff % vs Avg4']:
             val = row[col_name]
             if pd.isna(val):
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-750" data-sort="-999">—</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-75" data-sort="-999">—</td>\n'
             else:
                 color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
                 sign = "+" if val > 0 else ""
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-750" data-sort="{val}">{sign}{val:.2f}%</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-75" data-sort="{val}">{sign}{val:.2f}%</td>\n'
                 
         # 5. Del Qty Diff (vs Yest, vs Avg4)
         for col_name in ['Diff Qty vs Yesterday', 'Diff Qty vs Avg4']:
             val = row[col_name]
             if pd.isna(val):
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-750" data-sort="-999999999">—</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-75" data-sort="-999999999">—</td>\n'
             else:
                 color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
                 sign = "+" if val > 0 else ""
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-750" data-sort="{val}">{sign}{int(val):,}</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-75" data-sort="{val}">{sign}{int(val):,}</td>\n'
 
         # 6. Price Change Abs (At the very end)
         val = row['Price Change']
         if pd.isna(val):
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-750" data-sort="-999">—</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-75" data-sort="-999">—</td>\n'
         else:
-            # Color logic rule applied:
-            # - If Today's Close < Yesterday's Close -> Green
-            # - If Today's Close > Yesterday's Close -> Red
             if INVERT_COLORS:
                 color_class = "text-emerald-400 font-semibold" if val < 0 else "text-rose-400 font-semibold" if val > 0 else "text-slate-400"
             else:
                 color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
             sign = "+" if val > 0 else ""
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-750" data-sort="{val}">{sign}₹{val:,.2f}</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-75" data-sort="{val}">{sign}₹{val:,.2f}</td>\n'
             
         rows_html += f'</tr>\n'
 
@@ -614,7 +625,10 @@ def write_to_excel_workbook(master_df, valid_filenames, dates, chronological_ind
         ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
 
     # Apply styling & number formatting
-    total_dates = len(chronological_indices)
+    # Col index 1 = Symbol
+    # Cols 2 to 6 (B to F) = Price
+    # Cols 7 to 11 (G to K) = Del%
+    # Cols 12 to 16 (L to P) = Del Qty
     for r in range(2, len(TARGET_SYMBOLS) + 2):
         # 1. Close Prices: Cols 2 to 6 (B to F)
         for col in range(2, 7):
@@ -631,9 +645,7 @@ def write_to_excel_workbook(master_df, valid_filenames, dates, chronological_ind
         for col in range(12, 17):
             ws.cell(row=r, column=col).number_format = '#,##0'
 
-        # Format comparison columns
-        start_comp_col = 2 + (3 * total_dates) # Col 17 (Q)
-        
+        # Format comparison columns which start right after the daily columns (starting at Col 17)
         # 4. Diff % Yesterday (Q / Col 17) & Diff % Avg4 (R / Col 18)
         for col in [17, 18]:
             ws.cell(row=r, column=col).number_format = '+0.00%;-0.00%;0.00%'
