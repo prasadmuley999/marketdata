@@ -24,7 +24,7 @@ TARGET_SYMBOLS = [
     "JSWSTEEL", "KOTAKBANK", "LT", "M&M", "MARUTI", 
     "MAXHEALTH", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", 
     "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN", "SUNPHARMA", 
-    "TATACONSUM", "TMPV", "TATASTEEL", "TCS", "TECHM", 
+    "TATACONSUM", "TATAMOTORS", "TATASTEEL", "TCS", "TECHM", 
     "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"
 ]
 
@@ -32,7 +32,7 @@ EXCEL_FILE = "NSE_Merged_Reports.xlsx"
 
 # COLOR CODING CONFIGURATION
 # Set to True to highlight price drops in Green and increases in Red as specified.
-INVERT_COLORS = False
+INVERT_COLORS = True 
 
 def is_valid_file(filepath):
     if not os.path.exists(filepath):
@@ -251,7 +251,7 @@ def build_master_dashboard_data(valid_filenames):
                 'PCT_CHANGE': today_changes.values
             }).dropna()
             
-            # Keep only targets that are in Nifty 50 array
+            # Keep only targets that are in our custom symbol array
             summary = summary[summary['SYMBOL'].isin(TARGET_SYMBOLS)]
             gainers = summary.sort_values(by='PCT_CHANGE', ascending=False).head(4).to_dict('records')
             losers = summary.sort_values(by='PCT_CHANGE', ascending=True).head(4).to_dict('records')
@@ -465,6 +465,87 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
 </body>
 </html>"""
 
+def generate_email_body_html(valid_filenames, gainers, losers, pages_url):
+    """Generates a beautiful email body using inline-styled universal HTML compatible with modern email clients."""
+    last_updated = datetime.now().strftime('%d-%b-%Y %I:%M %p')
+    
+    table_rows = ""
+    for i in range(4):
+        g_sym = gainers[i]['SYMBOL'] if i < len(gainers) else "—"
+        g_chg = f"+{gainers[i]['PCT_CHANGE']:.2f}%" if i < len(gainers) else "—"
+        g_color = "#34d399" if i < len(gainers) else "#94a3b8"
+        
+        l_sym = losers[i]['SYMBOL'] if i < len(losers) else "—"
+        l_chg = f"{losers[i]['PCT_CHANGE']:.2f}%" if i < len(losers) else "—"
+        l_color = "#f87171" if i < len(losers) else "#94a3b8"
+        
+        table_rows += f"""
+        <tr style="border-bottom: 1px solid #334155;">
+            <td style="padding: 10px; text-align: left; font-weight: bold; color: #f1f5f9; font-size: 14px;">{g_sym}</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold; color: {g_color}; font-size: 14px;">{g_chg}</td>
+            <td style="padding: 10px; text-align: left; font-weight: bold; color: #f1f5f9; font-size: 14px;">{l_sym}</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold; color: {l_color}; font-size: 14px;">{l_chg}</td>
+        </tr>
+        """
+        
+    file_list_items = ""
+    for filename in valid_filenames[:5]:
+        match = re.search(r'MTO_(\d{8})\.DAT', filename)
+        date_label = datetime.strptime(match.group(1), '%d%m%Y').strftime('%d-%b-%Y') if match else ""
+        file_list_items += f"""
+        <li style="margin-bottom: 6px; font-size: 13px;">
+            <code style="background-color: #1e293b; padding: 3px 6px; border-radius: 4px; color: #38bdf8; font-family: monospace; font-size: 13px;">{filename}</code> 
+            <span style="color: #94a3b8; margin-left: 8px;">({date_label})</span>
+        </li>
+        """
+
+    return f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f1f5f9; padding: 32px 24px; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #1e293b;">
+        <h2 style="color: #ffffff; margin-top: 0; margin-bottom: 8px; font-size: 22px; font-weight: 800;">
+            📊 NSE Delivery & Price Dashboard
+        </h2>
+        <p style="color: #94a3b8; font-size: 14px; margin-top: 0; margin-bottom: 24px; line-height: 1.5;">
+            The daily sync run has successfully verified and formatted the <strong>7 most recent trading sessions</strong>.
+        </p>
+        
+        <div style="margin-bottom: 32px; margin-top: 10px;">
+            <a href="{pages_url}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; border-radius: 6px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                🔗 Click here to open your Live Dashboard
+            </a>
+        </div>
+        
+        <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
+            🚀 Today's Market Leaders (Nifty 50)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
+            <thead>
+                <tr style="background-color: #1e293b; color: #94a3b8; font-size: 12px; text-transform: uppercase;">
+                    <th style="padding: 10px; text-align: left; font-weight: 600;">Top 4 Gainers</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600;">% Change</th>
+                    <th style="padding: 10px; text-align: left; font-weight: 600;">Top 4 Losers</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 600;">% Change</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+        
+        <h3 style="color: #ffffff; margin-bottom: 12px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
+            📁 Synchronized Report Files (Last 5 Sessions)
+        </h3>
+        <ul style="padding-left: 0; list-style-type: none; margin-top: 0; margin-bottom: 0;">
+            {file_list_items}
+        </ul>
+        
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 32px 0;">
+        <p style="color: #64748b; font-size: 11px; text-align: center; margin: 0; line-height: 1.4;">
+            This is an automated operational notification. Compiled Excel spreadsheet is attached. <br>
+            Dashboard generation timestamp: {last_updated} IST.
+        </p>
+    </div>
+    """
+
 def write_to_excel_workbook(master_df, valid_filenames, dates, chronological_indices):
     """Compiles ONLY the master Dashboard calculation dataframe into Sheet1 to keep file size lightweight."""
     print(f"Compiling calculated records into lightweight '{EXCEL_FILE}'...")
@@ -538,7 +619,7 @@ def send_email_dashboard(recipient, html_content, email_body_html):
     msg['Subject'] = f"NSE Delivery & Price Dashboard - {datetime.now().strftime('%d-%b-%Y')}"
     
     from email.utils import formataddr
-    msg['From'] = "DailyStats"
+    msg['From'] = formataddr(("NSE Dashboard", smtp_user))
     msg['To'] = recipient
 
     msg_alternative = MIMEMultipart('alternative')
