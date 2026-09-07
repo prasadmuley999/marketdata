@@ -15,16 +15,17 @@ from openpyxl.utils import get_column_letter
 
 # Target Symbols list
 TARGET_SYMBOLS = [
-    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
-    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BHARTIARTL",
-    "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT", "ETERNAL",
-    "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE", "HINDALCO",
-    "HINDUNILVR", "ICICIBANK", "ITC", "INFY", "INDIGO",
-    "JSWSTEEL", "JIOFIN", "KOTAKBANK", "LT", "M&M",
-    "MARUTI", "MAXHEALTH", "NTPC", "NESTLEIND", "ONGC",
-    "POWERGRID", "RELIANCE", "SBILIFE", "SHRIRAMFIN", "SBIN",
-    "SUNPHARMA", "TCS", "TATACONSUM", "TMPV", "TATASTEEL",
-    "TECHM", "TITAN", "TRENT", "ULTRACEMCO", "WIPRO",
+    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", 
+    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BPCL", 
+    "BHARTIARTL", "BRITANNIA", "CIPLA", "COALINDIA", "DIVISLAB", 
+    "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM", "HCLTECH", 
+    "HDFCBANK", "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "HINDUNILVR", 
+    "ICICIBANK", "INDIGO", "INDUSINDBK", "INFY", "JIOFIN", 
+    "JSWSTEEL", "KOTAKBANK", "LT", "M&M", "MARUTI", 
+    "MAXHEALTH", "NESTLEIND", "NTPC", "ONGC", "POWERGRID", 
+    "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN", "SUNPHARMA", 
+    "TATACONSUM", "TATAMOTORS", "TATASTEEL", "TCS", "TECHM", 
+    "TITAN", "TRENT", "ULTRACEMCO", "WIPRO"
 ]
 
 EXCEL_FILE = "NSE_Merged_Reports.xlsx"
@@ -179,58 +180,81 @@ def build_master_dashboard_data(valid_filenames):
         
     close_df, change_df = fetch_historical_price_data(dates)
     
-    # Chronological: oldest first (D-4, D-3, D-2, D-1, D-0)
-    chronological_indices = list(range(len(target_filenames) - 1, -1, -1))
-    master_df = pd.DataFrame({'SYMBOL': TARGET_SYMBOLS})
+    # Process files in chronological order: oldest first (D-4, D-3, D-2, D-1, D-0)
+    chronological_dates = [dates[i] for i in range(4, -1, -1)]
+    chronological_date_strs = [d.strftime('%d-%b-%Y') for d in chronological_dates]
     
-    for i in chronological_indices:
-        filename = target_filenames[i]
-        dt = dates[i]
+    today_str = dates[0].strftime('%d-%b-%Y')
+    yesterday_str = dates[1].strftime('%d-%b-%Y')
+    hist_date_strs = [dates[j].strftime('%d-%b-%Y') for j in range(1, 5)] # past 4 days
+    
+    # Parse daily reports into fast lookups
+    mto_lookups = {}
+    for filename in target_filenames:
+        match = re.search(r'MTO_(\d{8})\.DAT', filename)
+        dt = datetime.strptime(match.group(1), '%d%m%Y')
         date_str = dt.strftime('%d-%b-%Y')
-        
         df_mto = parse_mto_file(os.path.join('reports', filename))
+        mto_lookups[date_str] = df_mto.set_index('SYMBOL').to_dict('index')
+
+    rows = []
+    for symbol in TARGET_SYMBOLS:
+        row_dict = {'SYMBOL': symbol}
+        ticker = f"{symbol}.NS"
         
-        pct_col = f"Del% ({date_str})"
-        qty_col = f"Del Qty ({date_str})"
-        prc_col = f"Price ({date_str})"
-        
-        df_mto = df_mto.rename(columns={'DEL_PCT': pct_col, 'DEL_QTY': qty_col})
-        master_df = pd.merge(master_df, df_mto[['SYMBOL', pct_col, qty_col]], on='SYMBOL', how='left')
-        
-        prices = []
-        for symbol in TARGET_SYMBOLS:
-            ticker = f"{symbol}.NS"
+        # 1. Close Prices (Oldest to Newest)
+        for d_str, d_obj in zip(chronological_date_strs, chronological_dates):
+            col_name = f"Price ({d_str})"
             price_val = None
             if not close_df.empty and ticker in close_df.columns:
-                target_date = dt.date()
+                target_date = d_obj.date()
                 if target_date in close_df.index:
                     val = close_df.loc[target_date, ticker]
                     if isinstance(val, pd.Series):
                         val = val.iloc[0]
                     if pd.notna(val):
                         price_val = val
-            prices.append(price_val)
+            row_dict[col_name] = price_val
             
-        master_df[prc_col] = prices
+        # 2. Delivery Percentages (Oldest to Newest)
+        for d_str in chronological_date_strs:
+            col_name = f"Del% ({d_str})"
+            val = None
+            if d_str in mto_lookups and symbol in mto_lookups[d_str]:
+                val = mto_lookups[d_str][symbol].get('DEL_PCT')
+            row_dict[col_name] = val
+            
+        # 3. Delivery Quantities (Oldest to Newest)
+        for d_str in chronological_date_strs:
+            col_name = f"Del Qty ({d_str})"
+            val = None
+            if d_str in mto_lookups and symbol in mto_lookups[d_str]:
+                val = mto_lookups[d_str][symbol].get('DEL_QTY')
+            row_dict[col_name] = val
+            
+        rows.append(row_dict)
+        
+    master_df = pd.DataFrame(rows)
 
-    today_str = dates[0].strftime('%d-%b-%Y')
-    yesterday_str = dates[1].strftime('%d-%b-%Y')
+    # Perform required math comparisons
+    t_pct_col = f"Del% ({today_str})"
+    y_pct_col = f"Del% ({yesterday_str})"
+    t_qty_col = f"Del Qty ({today_str})"
+    y_qty_col = f"Del Qty ({yesterday_str})"
+    t_prc_col = f"Price ({today_str})"
+    y_prc_col = f"Price ({yesterday_str})"
     
-    t_pct = f"Del% ({today_str})"
-    y_pct = f"Del% ({yesterday_str})"
-    t_qty = f"Del Qty ({today_str})"
-    y_qty = f"Del Qty ({yesterday_str})"
-    t_prc = f"Price ({today_str})"
-    y_prc = f"Price ({yesterday_str})"
-    
-    hist_pct_cols = [f"Del% ({dates[j].strftime('%d-%b-%Y')})" for j in range(1, 5)]
-    hist_qty_cols = [f"Del Qty ({dates[j].strftime('%d-%b-%Y')})" for j in range(1, 5)]
+    hist_pct_cols = [f"Del% ({d})" for d in hist_date_strs]
+    hist_qty_cols = [f"Del Qty ({d})" for d in hist_date_strs]
 
-    master_df['Diff % vs Yesterday'] = master_df[t_pct] - master_df[y_pct]
-    master_df['Diff % vs Avg4'] = master_df[t_pct] - master_df[hist_pct_cols].mean(axis=1)
-    master_df['Diff Qty vs Yesterday'] = master_df[t_qty] - master_df[y_qty]
-    master_df['Diff Qty vs Avg4'] = master_df[t_qty] - master_df[hist_qty_cols].mean(axis=1)
-    master_df['Price Change %'] = ((master_df[t_prc] - master_df[y_prc]) / master_df[y_prc]) * 100
+    master_df['Diff % vs Yesterday'] = master_df[t_pct_col] - master_df[y_pct_col]
+    master_df['Diff % vs Avg4'] = master_df[t_pct_col] - master_df[hist_pct_cols].mean(axis=1)
+    
+    master_df['Diff Qty vs Yesterday'] = master_df[t_qty_col] - master_df[y_qty_col]
+    master_df['Diff Qty vs Avg4'] = master_df[t_qty_col] - master_df[hist_qty_cols].mean(axis=1)
+    
+    # Price Change: Absolute value difference (Today Price - Yesterday Price)
+    master_df['Price Change'] = master_df[t_prc_col] - master_df[y_prc_col]
 
     master_df = master_df.sort_values(by='Diff % vs Yesterday', ascending=False, na_position='last')
     
@@ -250,11 +274,12 @@ def build_master_dashboard_data(valid_filenames):
                 'PCT_CHANGE': today_changes.values
             }).dropna()
             
-            # Keep only targets that are in our custom symbol array
             summary = summary[summary['SYMBOL'].isin(TARGET_SYMBOLS)]
             gainers = summary.sort_values(by='PCT_CHANGE', ascending=False).head(4).to_dict('records')
             losers = summary.sort_values(by='PCT_CHANGE', ascending=True).head(4).to_dict('records')
 
+    # Chronological index offsets are passed back to construct double headers cleanly
+    chronological_indices = list(range(len(target_filenames) - 1, -1, -1))
     return master_df, chronological_indices, dates, gainers, losers
 
 def generate_html_content(df, dates, chronological_indices, gainers, losers):
@@ -263,86 +288,113 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
     # Header Row 1: Primary structural groupings
     header_row_1 = '<tr class="bg-slate-800 text-slate-300 border-b border-slate-700 text-xs font-bold uppercase tracking-wider text-center">\n'
     header_row_1 += '  <th rowspan="2" onclick="sortTable(0)" class="px-4 py-3 text-left cursor-pointer hover:bg-slate-700 min-w-[140px] vertical-align-middle">Symbol</th>\n'
-    
-    col_idx = 1
-    for i in chronological_indices:
-        date_str = dates[i].strftime('%d-%b-%Y')
-        header_row_1 += f'  <th colspan="3" class="px-4 py-2 border-l border-slate-700 text-center">{date_str}</th>\n'
-        col_idx += 3
-        
+    header_row_1 += '  <th colspan="5" class="px-4 py-2 border-l border-slate-700 text-center">Close Prices</th>\n'
+    header_row_1 += '  <th colspan="5" class="px-4 py-2 border-l border-slate-700 text-center">Delivery %</th>\n'
+    header_row_1 += '  <th colspan="5" class="px-4 py-2 border-l border-slate-700 text-center">Delivery Quantity</th>\n'
     header_row_1 += f'  <th colspan="2" class="px-4 py-2 border-l border-slate-700 text-center">Del% Diff</th>\n'
     header_row_1 += f'  <th colspan="2" class="px-4 py-2 border-l border-slate-700 text-center">Del Qty Diff</th>\n'
-    header_row_1 += f'  <th rowspan="2" onclick="sortTable({col_idx+4})" class="px-4 py-3 text-right cursor-pointer hover:bg-slate-700 border-l border-slate-700 vertical-align-middle">Price Change %</th>\n'
+    header_row_1 += f'  <th rowspan="2" onclick="sortTable(20)" class="px-4 py-3 text-right cursor-pointer hover:bg-slate-700 border-l border-slate-700 vertical-align-middle">Price Change (Yest vs Today)</th>\n'
     header_row_1 += '</tr>\n'
 
-    # Header Row 2: Individual variables
+    # Header Row 2: Sub-headers displaying chronological dates
     header_row_2 = '<tr class="bg-slate-800/80 text-slate-400 border-b border-slate-700 text-[10px] uppercase tracking-wider text-right">\n'
     
-    sub_col_idx = 1
-    for _ in chronological_indices:
-        header_row_2 += f'  <th onclick="sortTable({sub_col_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">Del%</th>\n'
-        header_row_2 += f'  <th onclick="sortTable({sub_col_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">Del Qty</th>\n'
-        header_row_2 += f'  <th onclick="sortTable({sub_col_idx+2})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">Price</th>\n'
-        sub_col_idx += 3
+    sub_idx = 1
+    # 1. Sub-headers for Prices (Cols 1 to 5)
+    for i in range(4, -1, -1):
+        date_str = dates[i].strftime('%d-%b')
+        header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">{date_str}</th>\n'
+        sub_idx += 1
         
-    header_row_2 += f'  <th onclick="sortTable({sub_col_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
-    header_row_2 += f'  <th onclick="sortTable({sub_col_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
-    header_row_2 += f'  <th onclick="sortTable({sub_col_idx+2})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
-    header_row_2 += f'  <th onclick="sortTable({sub_col_idx+3})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
+    # 2. Sub-headers for Delivery % (Cols 6 to 10)
+    for i in range(4, -1, -1):
+        date_str = dates[i].strftime('%d-%b')
+        header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">{date_str}</th>\n'
+        sub_idx += 1
+        
+    # 3. Sub-headers for Delivery Quantity (Cols 11 to 15)
+    for i in range(4, -1, -1):
+        date_str = dates[i].strftime('%d-%b')
+        header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">{date_str}</th>\n'
+        sub_idx += 1
+        
+    # 4. Sub-headers for Del% Diff (Cols 16 & 17)
+    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
+    sub_idx += 2
+    
+    # 5. Sub-headers for Del Qty Diff (Cols 18 & 19)
+    header_row_2 += f'  <th onclick="sortTable({sub_idx})" class="px-4 py-2 cursor-pointer hover:bg-slate-700 border-l border-slate-700">vs Yest</th>\n'
+    header_row_2 += f'  <th onclick="sortTable({sub_idx+1})" class="px-4 py-2 cursor-pointer hover:bg-slate-700">vs Avg4</th>\n'
+    
     header_row_2 += '</tr>\n'
 
-    # Build Rows
+    # Build rows mapping corresponding grouped columns
     rows_html = ""
     for _, row in df.iterrows():
         sym = row['SYMBOL']
         rows_html += f'<tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">\n'
         rows_html += f'  <td class="px-4 py-3 text-sm font-bold text-slate-100">{sym}</td>\n'
         
-        for i in chronological_indices:
+        # 1. Close Prices (oldest to newest)
+        for i in range(4, -1, -1):
             date_str = dates[i].strftime('%d-%b-%Y')
-            pct = row[f"Del% ({date_str})"]
-            qty = row[f"Del Qty ({date_str})"]
-            prc = row[f"Price ({date_str})"]
+            val = row[f"Price ({date_str})"]
+            val_str = f"₹{val:,.2f}" if pd.notna(val) else "—"
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
-            pct_str = f"{pct:.2f}%" if pd.notna(pct) else "—"
-            qty_str = f"{int(qty):,}" if pd.notna(qty) else "—"
-            prc_str = f"₹{prc:,.2f}" if pd.notna(prc) else "—"
+        # 2. Delivery % (oldest to newest)
+        for i in range(4, -1, -1):
+            date_str = dates[i].strftime('%d-%b-%Y')
+            val = row[f"Del% ({date_str})"]
+            val_str = f"{val:.2f}%" if pd.notna(val) else "—"
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-300" data-sort="{pct if pd.notna(pct) else -1}">{pct_str}</td>\n'
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="{qty if pd.notna(qty) else -1}">{qty_str}</td>\n'
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400" data-sort="{prc if pd.notna(prc) else -1}">{prc_str}</td>\n'
+        # 3. Delivery Quantity (oldest to newest)
+        for i in range(4, -1, -1):
+            date_str = dates[i].strftime('%d-%b-%Y')
+            val = row[f"Del Qty ({date_str})"]
+            val_str = f"{int(val):,}" if pd.notna(val) else "—"
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-400 border-l border-slate-750" data-sort="{val if pd.notna(val) else -1}">{val_str}</td>\n'
             
+        # 4. Del% Diff (vs Yest, vs Avg4)
         for col_name in ['Diff % vs Yesterday', 'Diff % vs Avg4']:
             val = row[col_name]
             if pd.isna(val):
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-750" data-sort="-999">—</td>\n'
             else:
                 color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
                 sign = "+" if val > 0 else ""
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{val}">{sign}{val:.2f}%</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-750" data-sort="{val}">{sign}{val:.2f}%</td>\n'
                 
+        # 5. Del Qty Diff (vs Yest, vs Avg4)
         for col_name in ['Diff Qty vs Yesterday', 'Diff Qty vs Avg4']:
             val = row[col_name]
             if pd.isna(val):
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999999999">—</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-750" data-sort="-999999999">—</td>\n'
             else:
                 color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
                 sign = "+" if val > 0 else ""
-                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{val}">{sign}{int(val):,}</td>\n'
+                rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-750" data-sort="{val}">{sign}{int(val):,}</td>\n'
 
-        val = row['Price Change %']
+        # 6. Price Change Abs (At the very end)
+        val = row['Price Change']
         if pd.isna(val):
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500" data-sort="-999">—</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right text-slate-500 border-l border-slate-750" data-sort="-999">—</td>\n'
         else:
+            # Color logic rule applied:
+            # - If Today's Close < Yesterday's Close -> Green
+            # - If Today's Close > Yesterday's Close -> Red
             if INVERT_COLORS:
                 color_class = "text-emerald-400 font-semibold" if val < 0 else "text-rose-400 font-semibold" if val > 0 else "text-slate-400"
             else:
                 color_class = "text-emerald-400 font-semibold" if val > 0 else "text-rose-400 font-semibold" if val < 0 else "text-slate-400"
             sign = "+" if val > 0 else ""
-            rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class}" data-sort="{val}">{sign}{val:.2f}%</td>\n'
+            rows_html += f'  <td class="px-4 py-3 text-sm text-right {color_class} border-l border-slate-750" data-sort="{val}">{sign}₹{val:,.2f}</td>\n'
             
         rows_html += f'</tr>\n'
 
+    # Compile Gainer / Loser Markup blocks
     gainers_html = "".join([
         f'<div class="bg-slate-800 border-l-4 border-emerald-500 rounded p-4 shadow-sm">'
         f'  <div class="text-xs text-slate-400 font-bold tracking-wider">{g["SYMBOL"]}</div>'
@@ -391,13 +443,13 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             <div>
                 <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
-                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Top 4 Market Gainers
+                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Top 4 Market Gainers (Nifty 50)
                 </h2>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">{gainers_html}</div>
             </div>
             <div>
                 <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-1.5">
-                    <span class="h-2 w-2 rounded-full bg-rose-500"></span> Top 4 Market Losers
+                    <span class="h-2 w-2 rounded-full bg-rose-500"></span> Top 4 Market Losers (Nifty 50)
                 </h2>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">{losers_html}</div>
             </div>
@@ -465,7 +517,6 @@ def generate_html_content(df, dates, chronological_indices, gainers, losers):
 </html>"""
 
 def generate_email_body_html(valid_filenames, gainers, losers, pages_url):
-    """Generates a beautiful email body using inline-styled universal HTML compatible with modern email clients."""
     last_updated = datetime.now().strftime('%d-%b-%Y %I:%M %p')
     
     table_rows = ""
@@ -566,39 +617,37 @@ def write_to_excel_workbook(master_df, valid_filenames, dates, chronological_ind
     # Apply styling & number formatting
     total_dates = len(chronological_indices)
     for r in range(2, len(TARGET_SYMBOLS) + 2):
-        for i in range(total_dates):
-            col_pct = 2 + (3 * i)
-            col_qty = 3 + (3 * i)
-            col_prc = 4 + (3 * i)
+        # 1. Close Prices: Cols 2 to 6 (B to F)
+        for col in range(2, 7):
+            ws.cell(row=r, column=col).number_format = '₹#,##0.00'
             
-            # Divide percentages by 100 as openpyxl formats them natively
-            pct_val = ws.cell(row=r, column=col_pct).value
-            if isinstance(pct_val, (int, float)):
-                ws.cell(row=r, column=col_pct, value=pct_val / 100.0)
-            ws.cell(row=r, column=col_pct).number_format = '0.00%'
-            
-            ws.cell(row=r, column=col_qty).number_format = '#,##0'
-            ws.cell(row=r, column=col_prc).number_format = '₹#,##0.00'
+        # 2. Delivery Percentages: Cols 7 to 11 (G to K)
+        for col in range(7, 12):
+            ws.cell(row=r, column=col).number_format = '0.00%'
+            val = ws.cell(row=r, column=col).value
+            if isinstance(val, (int, float)):
+                ws.cell(row=r, column=col, value=val / 100.0)
+                
+        # 3. Delivery Quantities: Cols 12 to 16 (L to P)
+        for col in range(12, 17):
+            ws.cell(row=r, column=col).number_format = '#,##0'
 
         # Format comparison columns
-        start_comp_col = 2 + (3 * total_dates)
+        start_comp_col = 2 + (3 * total_dates) # Col 17 (Q)
         
-        # Diff % columns (Yesterday & Avg4)
-        for offset in [0, 1]:
-            ws.cell(row=r, column=start_comp_col + offset).number_format = '+0.00%;-0.00%;0.00%'
-            val = ws.cell(row=r, column=start_comp_col + offset).value
+        # 4. Diff % Yesterday (Q / Col 17) & Diff % Avg4 (R / Col 18)
+        for col in [17, 18]:
+            ws.cell(row=r, column=col).number_format = '+0.00%;-0.00%;0.00%'
+            val = ws.cell(row=r, column=col).value
             if isinstance(val, (int, float)):
-                ws.cell(row=r, column=start_comp_col + offset, value=val / 100.0)
+                ws.cell(row=r, column=col, value=val / 100.0)
 
-        # Diff Qty columns (Yesterday & Avg4)
-        for offset in [2, 3]:
-            ws.cell(row=r, column=start_comp_col + offset).number_format = '+#,##0;-#,##0;0'
+        # 5. Diff Qty Yesterday (S / Col 19) & Diff Qty Avg4 (T / Col 20)
+        for col in [19, 20]:
+            ws.cell(row=r, column=col).number_format = '+#,##0;-#,##0;0'
 
-        # Price Change % column (The last column)
-        ws.cell(row=r, column=start_comp_col + 4).number_format = '+0.00%;-0.00%;0.00%'
-        val = ws.cell(row=r, column=start_comp_col + 4).value
-        if isinstance(val, (int, float)):
-            ws.cell(row=r, column=start_comp_col + 4, value=val / 100.0)
+        # 6. Price Change: Absolute value difference (U / Col 21)
+        ws.cell(row=r, column=21).number_format = '+₹#,##0.00;-₹#,##0.00;₹0.00'
 
     wb.save(EXCEL_FILE)
     print("Lightweight Excel workbook saved and styled.")
