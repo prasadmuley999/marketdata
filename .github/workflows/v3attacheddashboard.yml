@@ -6,7 +6,7 @@ on:
     types: [aws-scheduled-trigger]
 
   # 🚀 Keeps the manual run active from the GitHub Actions UI
-  workflow_dispatch:
+
   
 permissions:
   contents: write # Allows GitHub to save the downloaded files and index.html back to your repo
