@@ -1,12 +1,10 @@
 name: v3 NSE File Downloader & Dashboard Builder
 
 on:
-  # 🔌 This allows AWS EventBridge Scheduler to trigger the workflow via API
-  repository_dispatch:
-    types: [aws-scheduled-trigger]
-
-  # 🚀 Keeps the manual run active from the GitHub Actions UI
-
+  schedule:
+    # Runs at 14:42 UTC (8:12 PM IST) every single day of the week
+    - cron: '42 13 * * *'
+  workflow_dispatch: # Allows manual run
   
 permissions:
   contents: write # Allows GitHub to save the downloaded files and index.html back to your repo
