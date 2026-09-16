@@ -3,7 +3,7 @@ name: v3 NSE File Downloader & Dashboard Builder
 on:
   schedule:
     # Runs at 14:42 UTC (8:12 PM IST) every single day of the week
-    - cron: '42 13 * * *'
+    - cron: '43 15 * * *'
   workflow_dispatch: # Allows manual run
   
 permissions:
